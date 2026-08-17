@@ -1,0 +1,15 @@
+# Test-suite dependencies. The service's own runtime deps come from
+# service/requirements.txt and are installed alongside these, because the
+# in-process layers import the ASGI app directly.
+-r service/requirements.txt
+
+pytest==8.4.2
+pytest-cov==6.2.1
+pytest-randomly==4.0.1        # proves order-independence; see TEST_STRATEGY.md
+httpx==0.28.1                 # async client -> concurrency tests; also backs TestClient
+hypothesis==6.140.3
+jsonschema==4.25.1            # OpenAPI 3.1 is JSON Schema 2020-12, so this validates directly
+schemathesis==4.4.1
+pytest-asyncio==1.2.0
+ruff==0.14.4
+mypy==1.18.2

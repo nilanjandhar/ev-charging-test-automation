@@ -1,0 +1,77 @@
+[project]
+name = "station-health-qa"
+version = "1.0.0"
+description = "Test automation suite for the NOC Station Health API"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+# `service` is on the path so the in-process layers can import the ASGI app
+# directly; `.` is on the path so `tests.helpers` resolves from any rootdir.
+pythonpath = [".", "service"]
+addopts = [
+    "--strict-markers",
+    "--strict-config",
+    "-ra",
+    "--durations=10",
+]
+markers = [
+    "unit: pure-function tests, no I/O, no app instance",
+    "contract: response conformance against the service's own /openapi.json",
+    "api: in-process integration through the ASGI app with an isolated database",
+    "e2e: live HTTP against a running service (docker compose); needs BASE_URL",
+    "perf: latency/concurrency smoke; reports numbers, never gates a merge",
+    "ui: Playwright dashboard smoke",
+    "slow: excluded from the PR gate by time cost, not by value",
+]
+# Warnings are errors: a DeprecationWarning from the service under test is a
+# finding, not noise. Third-party warnings we cannot fix are listed explicitly
+# so that the list itself documents the known dust.
+filterwarnings = [
+    "error",
+    "ignore:Using `httpx` with `starlette.testclient` is deprecated:DeprecationWarning",
+    "ignore::DeprecationWarning:schemathesis.*",
+    "ignore::DeprecationWarning:_pytest.*",
+]
+asyncio_mode = "strict"
+asyncio_default_fixture_loop_scope = "function"
+
+[tool.coverage.run]
+# Coverage is measured over the service, not over the tests: the number we care
+# about is "how much of the SUT did this suite actually exercise". Coverage of
+# test code measures nothing.
+source = ["service/app"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+exclude_lines = ["pragma: no cover", "if TYPE_CHECKING:"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+extend-exclude = ["service"]  # not ours to lint
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "ANN", "PT", "RUF"]
+ignore = [
+    "ANN401",  # typing.Any is legitimate for JSON payloads
+    "PT004",   # fixture-returns-none naming rule is deprecated upstream
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["B011"]  # `assert False` is fine in test scaffolding
+
+[tool.mypy]
+python_version = "3.11"
+files = ["tests"]
+strict = true
+# The service is third-party code from our point of view: type-check our tests
+# against it, but do not demand annotations from it.
+[[tool.mypy.overrides]]
+module = ["app.*", "schemathesis.*", "jsonschema.*"]
+ignore_missing_imports = true
+follow_imports = "skip"
+disallow_untyped_calls = false
