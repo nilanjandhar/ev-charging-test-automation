@@ -57,8 +57,9 @@ def assert_validation_error(
     changes on minor upgrades, so pinning it buys upgrade toil and no signal.
     """
     body = assert_status(response, 422)
-    assert isinstance(body, dict) and isinstance(body.get("detail"), list), (
-        f"expected FastAPI validation envelope, got {body!r}"
+    assert isinstance(body, dict), f"expected a JSON object, got {body!r}"
+    assert isinstance(body.get("detail"), list), (
+        f"expected FastAPI's validation envelope with a list `detail`, got {body!r}"
     )
     locations = [tuple(item.get("loc", ())) for item in body["detail"]]
     assert any(field in loc for loc in locations), (
@@ -72,9 +73,7 @@ def assert_validation_error(
 def assert_station_absent(response: httpx.Response, station_id: str) -> None:
     """`GET /stations/{id}/status` 404s with the documented detail message."""
     body = assert_status(response, 404)
-    assert body == {"detail": f"Station '{station_id}' not found"}, (
-        f"unexpected 404 body: {body!r}"
-    )
+    assert body == {"detail": f"Station '{station_id}' not found"}, f"unexpected 404 body: {body!r}"
 
 
 def station_ids(stations: list[dict[str, Any]]) -> list[str]:

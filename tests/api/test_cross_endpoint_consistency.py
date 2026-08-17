@@ -230,7 +230,7 @@ def test_one_absurd_latency_report_poisons_the_network_average(
 
     A single sensor glitch — or a station sending seconds where the schema expects
     milliseconds — moves the network-wide latency KPI by any amount it likes. The
-    station's own score is protected by the −20 cap, so nothing about *that*
+    station's own score is protected by the -20 cap, so nothing about *that*
     station looks wrong; the damage is entirely in the aggregate an ops lead
     watches.
 

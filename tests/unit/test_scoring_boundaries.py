@@ -19,7 +19,6 @@ mutation of the very numbers they exist to protect.
 from __future__ import annotations
 
 import pytest
-
 from app.scoring import compute_hygiene_score, is_flagged
 
 pytestmark = pytest.mark.unit

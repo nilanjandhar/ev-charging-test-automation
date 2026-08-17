@@ -185,8 +185,7 @@ def test_utc_offsets_are_dropped_rather_than_normalised(api_client: TestClient) 
     assert status["latest_timestamp"] == "2024-06-01T12:00:00"
     assert status["connectivity_status"] == "online"
     assert status["flagged"] is False, (
-        "R6: the +02:00 report of the *same instant* outranks the UTC one and "
-        "clears the flag"
+        "R6: the +02:00 report of the *same instant* outranks the UTC one and clears the flag"
     )
 
 

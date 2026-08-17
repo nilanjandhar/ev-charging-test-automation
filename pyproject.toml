@@ -66,7 +66,6 @@ extend-exclude = ["service"]  # not ours to lint
 select = ["E", "F", "I", "UP", "B", "SIM", "ANN", "PT", "RUF"]
 ignore = [
     "ANN401",  # typing.Any is legitimate for JSON payloads
-    "PT004",   # fixture-returns-none naming rule is deprecated upstream
 ]
 
 [tool.ruff.lint.per-file-ignores]
@@ -79,7 +78,14 @@ strict = true
 # The service is third-party code from our point of view: type-check our tests
 # against it, but do not demand annotations from it.
 [[tool.mypy.overrides]]
-module = ["app.*", "schemathesis.*", "jsonschema.*"]
+module = ["app.*", "schemathesis.*", "jsonschema.*", "referencing.*"]
 ignore_missing_imports = true
 follow_imports = "skip"
 disallow_untyped_calls = false
+
+# `@schema.parametrize()` is untyped upstream, so strict mode calls every test it
+# decorates untyped. Scoped to the one module that uses it rather than relaxed
+# globally.
+[[tool.mypy.overrides]]
+module = ["tests.contract.test_schemathesis_fuzz"]
+disallow_untyped_decorators = false

@@ -212,4 +212,6 @@ def test_operation_conforms_to_its_published_schema(case: Case) -> None:
         risk = _is_known(exc)
         if risk is None:
             raise
-        pytest.xfail(f"known service defect {risk} (unhandled {type(exc).__name__}) — see TEST_STRATEGY.md")
+        pytest.xfail(
+            f"known service defect {risk} (unhandled {type(exc).__name__}) — see TEST_STRATEGY.md"
+        )

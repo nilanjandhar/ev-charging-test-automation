@@ -24,7 +24,7 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 from jsonschema import Draft202012Validator
-from referencing import Registry, Resource
+from referencing import Registry
 from referencing.jsonschema import DRAFT202012
 
 from tests.helpers.assertions import assert_status
@@ -63,11 +63,20 @@ def _validator_for(
     except KeyError as exc:  # pragma: no cover - a missing entry is the assertion's job
         pytest.fail(f"{method} {path} does not document a JSON {status} response (missing {exc})")
 
-    registry = Registry().with_resource(
-        _DOCUMENT_URI, Resource(contents=openapi, specification=DRAFT202012)
-    )
-    ref = _DOCUMENT_URI + "#" + _pointer(
-        "paths", path, method.lower(), "responses", status, "content", "application/json", "schema"
+    registry = Registry().with_resource(_DOCUMENT_URI, DRAFT202012.create_resource(openapi))
+    ref = (
+        _DOCUMENT_URI
+        + "#"
+        + _pointer(
+            "paths",
+            path,
+            method.lower(),
+            "responses",
+            status,
+            "content",
+            "application/json",
+            "schema",
+        )
     )
     return Draft202012Validator({"$ref": ref}, registry=registry)
 

@@ -71,10 +71,9 @@ settings.load_profile(SETTINGS.hypothesis_profile)
 @pytest.fixture
 def isolated_engine(tmp_path: Any) -> Iterator[Engine]:
     """A private SQLite database, created and destroyed around a single test."""
-    from sqlalchemy import create_engine
-
     from app.database import Base
     from app.models import StationReport  # noqa: F401  (registers the table on Base)
+    from sqlalchemy import create_engine
 
     engine = create_engine(
         f"sqlite:///{tmp_path / 'station-health.db'}",
@@ -115,11 +114,10 @@ def api_client(isolated_engine: Engine) -> Iterator[TestClient]:
     `service/` is touched. The override is removed afterwards so a leaked
     fixture cannot silently affect the next test.
     """
-    from sqlalchemy.orm import Session, sessionmaker
-    from starlette.testclient import TestClient
-
     from app.database import get_db
     from app.main import app
+    from sqlalchemy.orm import Session, sessionmaker
+    from starlette.testclient import TestClient
 
     session_factory = sessionmaker(bind=isolated_engine, autocommit=False, autoflush=False)
 
@@ -149,11 +147,10 @@ def api_client_observing_500s(isolated_engine: Engine) -> Iterator[TestClient]:
     empty body, and asserting on the Python exception type would be asserting on
     an implementation detail no client can observe.
     """
-    from sqlalchemy.orm import Session, sessionmaker
-    from starlette.testclient import TestClient
-
     from app.database import get_db
     from app.main import app
+    from sqlalchemy.orm import Session, sessionmaker
+    from starlette.testclient import TestClient
 
     session_factory = sessionmaker(bind=isolated_engine, autocommit=False, autoflush=False)
 

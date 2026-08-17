@@ -35,10 +35,9 @@ Risks covered: **R7** (constant regressions), **R4** (saturation blind spot),
 from __future__ import annotations
 
 import pytest
+from app.scoring import FLAGGING_THRESHOLD, compute_hygiene_score, is_flagged
 from hypothesis import assume, given
 from hypothesis import strategies as st
-
-from app.scoring import FLAGGING_THRESHOLD, compute_hygiene_score, is_flagged
 
 pytestmark = pytest.mark.unit
 
@@ -81,7 +80,7 @@ def test_more_errors_never_improves_the_score(
     """R7: monotonicity in error_count — non-increasing, not strictly decreasing.
 
     A station that reports *more* problems must never be scored as healthier. The
-    weaker "non-increasing" form is the true one because of the −30 cap; asserting
+    weaker "non-increasing" form is the true one because of the -30 cap; asserting
     strict monotonicity would be a false property that fails on the first example
     above six errors.
     """

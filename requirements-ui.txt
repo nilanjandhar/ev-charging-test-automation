@@ -1,0 +1,9 @@
+# UI-only dependencies, kept out of requirements-dev.txt on purpose.
+#
+# Playwright pulls ~150 MB of browser binaries. The PR gate does not run the UI
+# suite (see TEST_STRATEGY.md on CI gating), so making every PR job download a
+# browser to run zero UI tests would be pure latency. Only the nightly job
+# installs this file.
+-r requirements-dev.txt
+
+pytest-playwright==0.7.1

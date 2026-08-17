@@ -58,12 +58,12 @@ pytestmark = pytest.mark.api
         pytest.param(
             {"firmware_version": ""}, "firmware_version", "string_too_short", id="empty-firmware"
         ),
-        pytest.param(
-            {"timestamp": "not-a-date"}, "timestamp", None, id="unparseable-timestamp"
-        ),
+        pytest.param({"timestamp": "not-a-date"}, "timestamp", None, id="unparseable-timestamp"),
         pytest.param({"error_count": 2.7}, "error_count", "int_from_float", id="fractional-errors"),
         pytest.param({"station_id": None}, "station_id", "string_type", id="null-station-id"),
-        pytest.param({"latency_ms": "fast"}, "latency_ms", "float_parsing", id="non-numeric-latency"),
+        pytest.param(
+            {"latency_ms": "fast"}, "latency_ms", "float_parsing", id="non-numeric-latency"
+        ),
     ],
 )
 def test_invalid_field_is_rejected_with_a_machine_readable_error(
@@ -85,8 +85,14 @@ def test_invalid_field_is_rejected_with_a_machine_readable_error(
 
 @pytest.mark.parametrize(
     "missing",
-    ["station_id", "timestamp", "connectivity_status", "latency_ms", "error_count",
-     "firmware_version"],
+    [
+        "station_id",
+        "timestamp",
+        "connectivity_status",
+        "latency_ms",
+        "error_count",
+        "firmware_version",
+    ],
 )
 def test_every_field_is_required(api_client: TestClient, missing: str) -> None:
     """No field has a server-side default; omitting any one is a 422, not a partial record.
@@ -188,9 +194,7 @@ def test_malformed_bodies_are_422_not_500(
     anyone writing a gateway rule or an alert on 4xx classes, and it is not in the
     brief — so it is asserted rather than assumed.
     """
-    response = api_client.post(
-        "/reports", content=body, headers={"Content-Type": content_type}
-    )
+    response = api_client.post("/reports", content=body, headers={"Content-Type": content_type})
 
     assert response.status_code == 422, f"got {response.status_code}: {response.text[:200]!r}"
     assert isinstance(response.json()["detail"], list)
@@ -270,7 +274,7 @@ def test_an_enormous_error_count_is_rejected_rather_than_crashing_ingest(
     unbounded so Pydantic accepts it; `models.py:14` is a plain `Integer` column, so
     the driver raises `OverflowError` and FastAPI turns it into a 500.
 
-    Verified boundary: 2**63 − 1 is accepted and scored (69.5); 2**63 is a 500.
+    Verified boundary: 2**63 - 1 is accepted and scored (69.5); 2**63 is a 500.
 
     Why it matters beyond tidiness: the ingest endpoint is unauthenticated, so any
     caller — or one station with a corrupted or wrapped counter — turns a 60-byte

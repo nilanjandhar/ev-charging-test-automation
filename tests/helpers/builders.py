@@ -21,7 +21,7 @@ Two rules the whole suite depends on:
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 
 ConnectivityStatus = Literal["online", "offline"]
@@ -29,7 +29,7 @@ ConnectivityStatus = Literal["online", "offline"]
 #: Every timestamp in the suite is an offset from this instant. Chosen to match
 #: the sample payload in the service README so hand-checking against the docs is
 #: trivial. Deliberately in the past: see `future_timestamp` for the clock-skew case.
-BASE_TIME = datetime(2024, 6, 1, 10, 0, 0, tzinfo=timezone.utc)
+BASE_TIME = datetime(2024, 6, 1, 10, 0, 0, tzinfo=UTC)
 
 DEFAULT_FIRMWARE = "v2.3.1"
 
