@@ -1,30 +1,181 @@
-# Local working documents — not part of the submission
-task.md
-Staff QA Engineer - Interview Assignment.md
+# ---------------------------------------------------------------------------
+# What this repository publishes
+# ---------------------------------------------------------------------------
+# Intentionally tracked: README.md, TEST_STRATEGY.md, AI_USAGE.md, CLAUDE.md
+# (the standing AI context block, cited by AI_USAGE.md), notes/, tests/, tools/,
+# .github/workflows/, Makefile, pyproject.toml, requirements-*.txt, service/.
+#
+# Everything below is either private working material, generated output, or
+# machine-local. Nothing here should reach a public repository.
 
+# ---------------------------------------------------------------------------
+# Private working documents — must never be published
+# ---------------------------------------------------------------------------
+# The assignment brief names the hiring company, and the submission checklist
+# forbids that name appearing anywhere in the repo.
+Staff QA Engineer - Interview Assignment.md
+*Interview Assignment*.md
+
+# My own prompt playbook. Working material, not a deliverable.
+task.md
+
+# ---------------------------------------------------------------------------
+# Secrets and local environment overrides
+# ---------------------------------------------------------------------------
+# Every knob in this suite is env-driven (see tests/helpers/config.py), so a
+# local .env is a realistic thing to create — and exactly the thing not to push.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets.*
+credentials.*
+
+# ---------------------------------------------------------------------------
 # Python
+# ---------------------------------------------------------------------------
 __pycache__/
 *.py[cod]
+*$py.class
+*.so
+.Python
+.python-version
+build/
+develop-eggs/
+dist/
+eggs/
+.eggs/
+sdist/
+wheels/
+*.egg-info/
+*.egg
+MANIFEST
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Virtual environments
 .venv/
 venv/
-*.egg-info/
+env/
+ENV/
+.direnv/
 
-# Test / tooling output
+# ---------------------------------------------------------------------------
+# Test, coverage and tooling output
+# ---------------------------------------------------------------------------
 .pytest_cache/
 .hypothesis/
 .mypy_cache/
+.dmypy.json
+dmypy.json
 .ruff_cache/
+.tox/
+.nox/
+.cache/
 .coverage
+.coverage.*
 coverage.xml
 htmlcov/
+nosetests.xml
+junit.xml
+junit*.xml
+report.html
+
+# `make coverage` and every CI job write here (JUnit XML + coverage), and CI
+# uploads it as an artifact instead. Nothing in it belongs in git.
 reports/
-*.db
-noc.db
 
-# Playwright
+# Schemathesis / mutation-check scratch output. Note notes/mutation-check.md IS
+# tracked — it is the committed evidence, not a generated scratch file.
+.schemathesis/
+mutants/
+
+# ---------------------------------------------------------------------------
+# Playwright / Node
+# ---------------------------------------------------------------------------
 node_modules/
+package-lock.json
 playwright-report/
+blob-report/
+playwright/.cache/
 test-results/
+*.webm
+trace.zip
 
-# OS
+# ---------------------------------------------------------------------------
+# Databases created by running the service or the suite
+# ---------------------------------------------------------------------------
+# The service builds its engine from DATABASE_URL at import time and defaults to
+# a file relative to the working directory, so a stray .db can appear at the repo
+# root, in service/, or wherever a command was run from.
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+noc.db
+service/*.db
+
+# ---------------------------------------------------------------------------
+# Editors and IDEs
+# ---------------------------------------------------------------------------
+.vscode/
+.idea/
+*.iml
+*.iws
+*.ipr
+.project
+.pydevproject
+.settings/
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.swo
+*~
+.\#*
+\#*\#
+
+# ---------------------------------------------------------------------------
+# AI assistant local state
+# ---------------------------------------------------------------------------
+# Session logs and machine-local permission settings. CLAUDE.md is the exception
+# and is tracked on purpose — it is the standing context block AI_USAGE.md cites.
+.claude/
+.aider*
+.cursor/
+.github/copilot-instructions.local.md
+
+# ---------------------------------------------------------------------------
+# Logs, scratch space and temporary files
+# ---------------------------------------------------------------------------
+*.log
+logs/
+*.pid
+*.seed
+*.out
+scratch/
+scratchpad/
+tmp/
+temp/
+*.tmp
+*.bak
+*.orig
+*.rej
+
+# ---------------------------------------------------------------------------
+# OS cruft
+# ---------------------------------------------------------------------------
 .DS_Store
+.DS_Store?
+._*
+.AppleDouble
+.LSOverride
+.Spotlight-V100
+.Trashes
+Icon?
+Thumbs.db
+ehthumbs.db
+desktop.ini
+$RECYCLE.BIN/
