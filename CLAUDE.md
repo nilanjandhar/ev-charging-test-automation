@@ -16,8 +16,8 @@ Deliverables: pytest suite, TEST_STRATEGY.md, AI_USAGE.md, README.md,
 HARD RULES
 - Never modify anything under service/. If a test can only pass by changing the
   service, the service has a bug — say so instead.
-- Every test must map to a named failure mode. If you can't say what regression
-  it catches, don't write it.
+- Every test must map to a named failure mode, stated in its docstring in plain
+  words. If you can't say what regression it catches, don't write it.
 - No sleep()-based synchronisation. No test that depends on execution order.
 - No bare `assert response.status_code == 200` as the only assertion — assert on
   the response body's shape and values too.
@@ -25,7 +25,8 @@ HARD RULES
   seeded/Hypothesis-managed source, no external network calls.
 - Prefer few strong tests over many shallow ones. Three meaningful tests beat
   twenty trivial ones.
-- Type-hint fixtures and helpers. Docstring each test with the risk it covers.
+- Type-hint fixtures and helpers. Docstring each test with the failure mode it
+  catches, in plain words.
 
 WORKING STYLE
 - When you're unsure about intended service behaviour, stop and ask me. Do not
@@ -40,8 +41,8 @@ WORKING STYLE
   file) or PostgreSQL (Docker). State survives a restart. See
   `notes/behaviour-inventory.md` §3.
 - `POST /reports` is **append-only**. Nothing is ever updated or deduplicated.
-- Risk IDs (R1…R14) are defined in `notes/risk-register.md`. Every test docstring
-  cites one.
+- `notes/risk-register.md` explains *what* is worth testing and why. Tests do not
+  cite risk IDs — each docstring names the failure mode it catches in its own words.
 - Isolation in-process is done with `app.dependency_overrides[get_db]`, never by
   truncating tables or re-importing the app. Over the wire (e2e) it is done with
   unique station IDs and delta assertions.

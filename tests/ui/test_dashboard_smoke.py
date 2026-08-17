@@ -8,7 +8,7 @@ of bug (a JavaScript typo, a renamed field) that one smoke test already catches.
 So: one test, nightly, never in the PR gate. The reasoning is in the risk register
 under "the three I would not spend automation budget on".
 
-What this covers that the API layer cannot (**R14**): the dashboard reads six
+What this covers that the API layer cannot: the dashboard reads six
 fields across three endpoints and renders them. A backwards-compatible-looking API
 change — `flagged` becoming a string, `average_latency_ms` losing its null case —
 leaves every API test green and silently blanks a panel an operator is watching.
@@ -36,7 +36,7 @@ pytestmark = [pytest.mark.ui, pytest.mark.slow]
 
 @pytest.mark.p2
 def test_dashboard_renders_an_ingested_station(page: Page, live_client: httpx.Client) -> None:
-    """R14: a station ingested via the API appears on the dashboard with its real status.
+    """A station ingested via the API appears on the dashboard with its real status.
 
     Seeds through the API rather than through fixtures or the database, so the test
     exercises the same path an actual station does: POST a report, then assert the

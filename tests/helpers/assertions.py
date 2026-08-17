@@ -83,13 +83,13 @@ def station_ids(stations: list[dict[str, Any]]) -> list[str]:
 def find_station(stations: list[dict[str, Any]], station_id: str) -> dict[str, Any]:
     """The single entry for `station_id`; fails loudly if it is missing or duplicated.
 
-    The duplicate check is not incidental — risk R1 is precisely that this list
-    can contain the same station twice.
+    The duplicate check is not incidental: a retried report makes this list contain
+    the same station twice.
     """
     matches = [s for s in stations if s["station_id"] == station_id]
     assert matches, f"station {station_id!r} not in {station_ids(stations)!r}"
     assert len(matches) == 1, (
         f"station {station_id!r} appears {len(matches)} times in the response "
-        f"(risk R1 — duplicate rows survive the latest-per-station join): {matches!r}"
+        f"(duplicate rows survive the latest-per-station join): {matches!r}"
     )
     return matches[0]

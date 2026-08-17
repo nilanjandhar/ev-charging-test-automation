@@ -17,8 +17,8 @@ status and network metrics. The service is in [`service/`](service/) and is
   eight service defects found.
 - **[AI_USAGE.md](AI_USAGE.md)** — how I used an AI assistant: one output accepted,
   one substantially rewritten, one rejected.
-- **[notes/test-inventory.md](notes/test-inventory.md)** — every test, its tier, and
-  the risk it covers, in one table. Regenerate with `make inventory`.
+- **[notes/test-inventory.md](notes/test-inventory.md)** — every test and its
+  priority tier, in one table. Regenerate with `make inventory`.
 - **[notes/](notes/)** — the working artifacts behind the strategy: behaviour
   inventory, risk register, Docker-vs-local analysis, mutation-check output, and
   the raw AI journal.

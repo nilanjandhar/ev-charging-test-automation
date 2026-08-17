@@ -153,7 +153,7 @@ def api_client(isolated_engine: Engine) -> Iterator[TestClient]:
     * *Unique station IDs per test.* Needs no reset and is parallel-safe, but
       `GET /metrics/summary` aggregates over every station in the database, so no
       test could ever assert `total_stations == 2`. Aggregates are where the
-      interesting bugs are (R1, R5), so giving them up is not a small cost. It is
+      interesting bugs are, so giving them up is not a small cost. It is
       still the right answer over real HTTP, where dependency overrides are
       impossible — see `live_client`.
     * *Truncate between tests.* Fast and exact, but it makes the suite

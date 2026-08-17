@@ -63,17 +63,17 @@ CHECKS = [
     response_headers_conformance,
 ]
 
-#: The one operation with a known undocumented status code (R9: `stations.py:56`
-#: raises 404, the schema declares only 200 and 422). Suppressed for that
-#: operation *only*, so an undocumented status code anywhere else still fails.
+#: The one operation with a known undocumented status code: `stations.py:56` raises
+#: 404 while the schema declares only 200 and 422. Suppressed for that operation
+#: *only*, so an undocumented status code anywhere else still fails.
 _R9_OPERATION = "/stations/{station_id}/status"
 
 #: The station the seeding fixture below creates.
 SEED_STATION_ID = "FUZZ-SEED-001"
 
-#: Known defects in the service under test, expressed as substrings of the failure
-#: schemathesis reports. A run that produces *only* these is tolerated; anything
-#: else fails.
+#: Known defects in the service under test, each as a name and a substring of the
+#: failure schemathesis reports. A run that produces *only* these is tolerated;
+#: anything else fails.
 #:
 #: This allowlist exists instead of switching whole checks off. Excluding
 #: `response_schema_conformance` for the three endpoints that return a timestamp
@@ -81,32 +81,31 @@ SEED_STATION_ID = "FUZZ-SEED-001"
 #: body-shape regression on the three most important endpoints in the service.
 #:
 #: The allowlist cannot rot silently: both entries have a matching
-#: `xfail(strict=True)` test in `test_openapi_conformance.py`, so the moment either
-#: defect is fixed those tests XPASS, the build fails, and whoever fixed it is
-#: pointed here.
+#: `xfail(strict=True)` test elsewhere in the suite, so the moment either defect is
+#: fixed those tests XPASS, the build fails, and whoever fixed it is pointed here.
 KNOWN_DEFECTS: tuple[tuple[str, str], ...] = (
     (
-        "R16",
+        "naive-datetime",
         # `latest_timestamp` is declared `format: date-time` (RFC 3339, which
         # requires an offset), but the column is a naive DateTime (models.py:11) so
         # the service serialises `2024-06-01T10:00:00` with no zone at all.
         "is not a 'date-time'",
     ),
     (
-        "R17",
+        "unbounded-error-count",
         # `error_count` is `integer, ge=0` with no maximum, so 2**63 passes
-        # validation and overflows the driver. This one is a *server error*, which
-        # is normally the last thing to tolerate — it is on the list only because
-        # it is pinned by an xfail in tests/api/test_ingest_validation.py and the
-        # alternative is a permanently red suite. It is also why this file is
-        # `slow` and runs nightly: shrinking that failure costs ~50 seconds.
+        # validation and overflows the driver. A *server error* is normally the last
+        # thing to tolerate; it is here only because it is pinned by an xfail in
+        # tests/api/test_ingest_validation.py and the alternative is a permanently
+        # red suite. It is also why this file is `slow` and runs nightly: shrinking
+        # that failure costs ~50 seconds.
         "OverflowError",
     ),
 )
 
 
 def _is_known(failure: BaseException) -> str | None:
-    """Return the risk ID if this failure is a documented defect, else None.
+    """Return the defect's name if this failure is a documented one, else None.
 
     Matches the exception type name as well as its message: an unhandled server
     error arrives here as the original exception (the ASGI transport re-raises it
@@ -125,8 +124,8 @@ def _seed_one_station() -> None:
     xfail counts. Against an empty database the collection endpoints return `[]`,
     which validates against any item schema — so the fuzzer's verdict on
     `/stations`, `/stations/poor-hygiene` and `/stations/{id}/status` depended on
-    whether some earlier test had happened to leave rows behind, and R16 was found
-    or missed at random.
+    whether some earlier test had happened to leave rows behind, so the naive-datetime
+    defect was found or missed at random.
 
     A vacuously-passing fuzz test is the worst possible outcome: it reports
     coverage it does not have. One seeded report makes the payloads non-empty and
@@ -154,7 +153,7 @@ def _seed_one_station() -> None:
 @schema.parametrize()
 @settings(max_examples=SETTINGS.schemathesis_max_examples, deadline=None)
 def test_operation_conforms_to_its_published_schema(case: Case) -> None:
-    """R9/R11/R16: every operation answers schema-valid inputs with schema-valid responses.
+    """Every operation answers schema-valid inputs with schema-valid responses.
 
     One test per documented operation, so a failure names the endpoint rather than
     "the fuzz suite". Failures that are already-documented service defects are
@@ -171,7 +170,7 @@ def test_operation_conforms_to_its_published_schema(case: Case) -> None:
         # fuzzer happened to guess a real station. Pinning the ID exercises the 200
         # response every time; the 404 path is covered deterministically by
         # `tests/api/test_ingest_validation.py::test_unknown_station_is_a_clean_404`
-        # and by the R9 xfail in `test_openapi_conformance.py`.
+        # and by the undocumented-404 xfail in `test_openapi_conformance.py`.
         case.path_parameters = {"station_id": SEED_STATION_ID}
 
     try:
@@ -182,11 +181,11 @@ def test_operation_conforms_to_its_published_schema(case: Case) -> None:
             raise
         # Every failure in this group is a defect already on the record.
         known = sorted({_is_known(failure) or "?" for failure in group.exceptions})
-        pytest.xfail(f"known service defect(s) {', '.join(known)} — see TEST_STRATEGY.md")
+        pytest.xfail(f"known service defect(s): {', '.join(known)} — see TEST_STRATEGY.md")
     except Exception as exc:
         # An unhandled server exception: the ASGI transport re-raises it here
         # instead of turning it into a 500, so it never reaches `not_a_server_error`
-        # and never becomes a FailureGroup. R17 arrives by this route.
+        # and never becomes a FailureGroup. The overflow arrives by this route.
         risk = _is_known(exc)
         if risk is None:
             raise

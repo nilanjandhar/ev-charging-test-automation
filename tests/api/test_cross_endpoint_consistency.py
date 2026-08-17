@@ -11,9 +11,9 @@ Every test here runs against an empty, private database (see `api_client` in
 `tests/conftest.py`), which is what makes exact assertions on network-wide
 aggregates possible.
 
-Risks covered: **R11** (endpoints disagree), **R1** (duplicate reports
-double-count), **R5** (one absurd report poisons the network average),
-**R2/R7** (flag consistency end to end).
+Covered here: the endpoints disagreeing with each other, duplicate reports
+double-counting, one absurd report poisoning the network average, and flag
+consistency end to end.
 """
 
 from __future__ import annotations
@@ -40,7 +40,7 @@ pytestmark = pytest.mark.api
 def test_a_single_report_is_reflected_identically_by_every_endpoint(
     api_client: TestClient,
 ) -> None:
-    """R11: ingest -> status -> list -> metrics must describe the same station.
+    """Ingest -> status -> list -> metrics must describe the same station.
 
     The core flow. A report is accepted, and the score it returns has to be the
     score the detail view shows, the score the list view shows, and the numbers
@@ -93,7 +93,7 @@ def test_a_single_report_is_reflected_identically_by_every_endpoint(
 def test_flagged_stations_agree_across_list_worklist_and_metrics(
     api_client: TestClient,
 ) -> None:
-    """R11/R2: the poor-hygiene worklist is exactly the set of stations flagged elsewhere.
+    """The poor-hygiene worklist is exactly the set of stations flagged elsewhere.
 
     An operator triages from `/stations/poor-hygiene` and drills into
     `/stations/{id}/status`. If those two disagree the tool is worse than useless:
@@ -101,7 +101,7 @@ def test_flagged_stations_agree_across_list_worklist_and_metrics(
     *set* equality in both directions, plus the count the dashboard displays.
 
     Ordering is deliberately not asserted — `/stations/poor-hygiene` has no
-    `ORDER BY` (`stations.py:82-91`, risk R10) so its order is whatever the engine
+    `ORDER BY` (`stations.py:82-91`) so its order is whatever the engine
     returns and differs between SQLite and PostgreSQL. Pinning today's accident
     would be a test that passes locally and fails in Docker for no useful reason.
     """
@@ -138,7 +138,7 @@ def test_flagged_stations_agree_across_list_worklist_and_metrics(
         assert detail["hygiene_score"] == entry["hygiene_score"]
         assert detail["latest_timestamp"] == entry["latest_timestamp"]
 
-    # And the borderline station is the R2 boundary, end to end rather than in a unit test:
+    # And the borderline station is the flagging boundary, end to end this time:
     edge = assert_status(api_client.get(f"/stations/{borderline}/status"), 200)
     assert edge["hygiene_score"] == 60.0
     assert edge["flagged"] is False
@@ -149,7 +149,7 @@ def test_flagged_stations_agree_across_list_worklist_and_metrics(
 def test_metrics_aggregate_only_the_latest_report_per_station(
     api_client: TestClient,
 ) -> None:
-    """R11: superseded reports must not leak into network totals.
+    """Superseded reports must not leak into network totals.
 
     A station that reported 9 errors an hour ago and 1 error now contributes 1 to
     `total_error_count`, not 10. This is the arithmetic the whole dashboard rests
@@ -190,7 +190,7 @@ def test_metrics_aggregate_only_the_latest_report_per_station(
 
 @pytest.mark.p1
 def test_metrics_on_an_empty_network(api_client: TestClient) -> None:
-    """R11: the zero case has to be representable, not a division by zero.
+    """The zero case has to be representable, not a division by zero.
 
     `average_latency_ms` is `Optional[float]` precisely so this case can return
     null (`metrics.py:38-40`). The dashboard renders it as 'N/A'
@@ -211,7 +211,7 @@ def test_metrics_on_an_empty_network(api_client: TestClient) -> None:
 
 @pytest.mark.p2
 def test_station_listing_is_ordered_stably(api_client: TestClient) -> None:
-    """R10: `/stations` is ordered by station_id and must stay that way.
+    """`/stations` is ordered by station_id and must stay that way.
 
     Unlike the worklist, this endpoint *does* order (`stations.py:31`). The
     dashboard renders it as a table an operator scans top to bottom, so a
@@ -232,7 +232,7 @@ def test_station_listing_is_ordered_stably(api_client: TestClient) -> None:
 def test_one_absurd_latency_report_poisons_the_network_average(
     api_client: TestClient,
 ) -> None:
-    """R5: `latency_ms` has no upper bound and the metric is an unweighted mean.
+    """`latency_ms` has no upper bound and the metric is an unweighted mean.
 
     A single sensor glitch — or a station sending seconds where the schema expects
     milliseconds — moves the network-wide latency KPI by any amount it likes. The
@@ -262,13 +262,13 @@ def test_one_absurd_latency_report_poisons_the_network_average(
 def test_an_infinite_latency_report_erases_the_network_average_entirely(
     api_client: TestClient,
 ) -> None:
-    """R18: one report of `Infinity` and the latency KPI silently becomes null.
+    """One report of `Infinity` and the latency KPI silently becomes null.
 
     JSON has no infinity literal, but `1e999` parses to `float('inf')` and
     `schemas.py:11` bounds `latency_ms` only from below, so it is accepted. The mean
     becomes inf, and Pydantic serialises a non-finite float as JSON `null`.
 
-    Worse than R5's distortion: `null` is exactly what a *healthy, empty* network
+    Worse than merely skewing the mean: `null` is what a *healthy, empty* network
     returns, and the dashboard renders both as 'N/A'. The operator cannot tell the
     two apart, and no threshold alert fires on a null.
 
@@ -295,13 +295,13 @@ def test_an_infinite_latency_report_erases_the_network_average_entirely(
 
     assert metrics["total_stations"] == 2, "the station is real and counted"
     assert metrics["average_latency_ms"] is None, (
-        "R18: indistinguishable from an empty network, and no threshold alert can fire"
+        "indistinguishable from an empty network, and no threshold alert can fire"
     )
     assert metrics["flagged_count"] == 0, "and nothing looks wrong anywhere else"
 
 
 # ---------------------------------------------------------------------------
-# R1 — duplicate reports. Two xfails, both strict.
+# Duplicate reports. Two xfails, both strict.
 # ---------------------------------------------------------------------------
 # These assert the behaviour I believe is correct, not the behaviour the service
 # has. `strict=True` means that if the service is fixed, the XPASS fails the build
@@ -313,14 +313,14 @@ def test_an_infinite_latency_report_erases_the_network_average_entirely(
 @pytest.mark.xfail(
     strict=True,
     reason=(
-        "R1: duplicate (station_id, timestamp) rows both survive the MAX(timestamp) "
+        "duplicate (station_id, timestamp) rows both survive the MAX(timestamp) "
         "join at stations.py:26-30, so a retried report lists the station twice"
     ),
 )
 def test_a_retried_report_does_not_duplicate_the_station_in_the_listing(
     api_client: TestClient,
 ) -> None:
-    """R1: `GET /stations` must list each known station exactly once.
+    """`GET /stations` must list each known station exactly once.
 
     At-least-once delivery is the norm for field telemetry: an edge gateway
     retries on a timeout, a station re-sends after a TCP reset, a queue replays a
@@ -346,14 +346,14 @@ def test_a_retried_report_does_not_duplicate_the_station_in_the_listing(
 @pytest.mark.xfail(
     strict=True,
     reason=(
-        "R1: the same duplicate rows are counted independently at metrics.py:33-40, "
+        "the same duplicate rows are counted independently at metrics.py:33-40, "
         "inflating every network-level number"
     ),
 )
 def test_a_retried_report_does_not_inflate_network_metrics(api_client: TestClient) -> None:
-    """R1: one station that reports twice is still one station.
+    """One station that reports twice is still one station.
 
-    This is the more expensive half of R1. `total_stations`, `online_count`,
+    This is the more expensive half of the defect. `total_stations`, `online_count`,
     `flagged_count` and `total_error_count` are all row counts over the join, so a
     single duplicated report inflates capacity planning, SLA reporting and the
     flagged-station count an operator uses to decide whether tonight is a problem.
@@ -376,12 +376,12 @@ def test_a_retried_report_does_not_inflate_network_metrics(api_client: TestClien
 def test_a_retried_report_leaves_the_station_detail_view_correct(
     api_client: TestClient,
 ) -> None:
-    """R1, the half that *does* hold: `/stations/{id}/status` is idempotent.
+    """`/stations/{id}/status` is idempotent.
 
     Worth its own passing test rather than folding into the xfails above. The
     detail endpoint uses `ORDER BY timestamp DESC LIMIT 1` (`stations.py:52-54`),
     so it collapses the tie and returns one report. That asymmetry is the precise
-    shape of R1: the same duplicate is invisible here and doubled two endpoints
+    shape of the defect: the same duplicate is invisible here and doubled two endpoints
     over, which is how an inconsistency like this survives a casual manual check.
     """
     sid = station_id()

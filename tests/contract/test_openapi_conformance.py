@@ -8,14 +8,13 @@ can return, and whether the documented set is complete.
 That asymmetry decides what these tests do. Validating a 200 body against its
 declared schema is cheap insurance against someone hand-writing a `response_model`
 or adding a `JSONResponse`; validating the *error* responses is where the actual
-finding is (R9).
+finding is.
 
 OpenAPI 3.1 schemas are JSON Schema 2020-12, so `jsonschema` validates them
 directly with no translation layer — see `TEST_STRATEGY.md` for why that beat
 pulling in a heavier OpenAPI-specific validator.
 
-Risks covered: **R9** (undocumented 404), **R11** (response-shape drift between
-endpoints).
+Covered here: the undocumented 404, and response-shape drift between endpoints.
 """
 
 from __future__ import annotations
@@ -137,7 +136,7 @@ def test_the_service_publishes_a_valid_openapi_document(openapi_schema: dict[str
 def test_every_documented_success_response_matches_its_schema(
     api_client: TestClient, openapi_schema: dict[str, Any]
 ) -> None:
-    """R11: one flow, every endpoint, each response validated against its own contract.
+    """One flow, every endpoint, each response validated against its own contract.
 
     Driven through a single ingest so the responses describe a real station rather
     than empty collections — an empty list validates against almost any item
@@ -181,7 +180,7 @@ def test_every_documented_success_response_matches_its_schema(
 def test_validation_errors_match_the_documented_error_schema(
     api_client: TestClient, openapi_schema: dict[str, Any]
 ) -> None:
-    """R9: the 422 envelope is part of the contract and clients parse it.
+    """The 422 envelope is part of the contract and clients parse it.
 
     `HTTPValidationError` is a published component. Anything that changes its
     shape — a custom exception handler, a FastAPI major bump — breaks every client
@@ -196,7 +195,7 @@ def test_validation_errors_match_the_documented_error_schema(
 
 @pytest.mark.p1
 def test_metrics_summary_declares_a_nullable_average(openapi_schema: dict[str, Any]) -> None:
-    """R11: `average_latency_ms` must stay nullable in the published schema.
+    """`average_latency_ms` must stay nullable in the published schema.
 
     On an empty network the service returns `null` (`metrics.py:38-40`) and the
     dashboard branches on it (`static/index.html:94-96`). If the field were ever
@@ -222,14 +221,14 @@ def test_metrics_summary_declares_a_nullable_average(openapi_schema: dict[str, A
 @pytest.mark.xfail(
     strict=True,
     reason=(
-        "R9: stations.py:56 raises 404 for an unknown station, but the OpenAPI "
+        "stations.py:56 raises 404 for an unknown station, but the OpenAPI "
         "document for that path declares only 200 and 422"
     ),
 )
 def test_the_404_the_service_actually_returns_is_documented(
     openapi_schema: dict[str, Any],
 ) -> None:
-    """R9: a status code the service returns must appear in the schema it publishes.
+    """A status code the service returns must appear in the schema it publishes.
 
     The one contract failure a code-generated schema cannot catch by construction:
     `HTTPException(404)` is raised in the handler body, so FastAPI cannot infer it
@@ -248,7 +247,7 @@ def test_the_404_the_service_actually_returns_is_documented(
 @pytest.mark.xfail(
     strict=True,
     reason=(
-        "R16: latest_timestamp is declared `format: date-time` (RFC 3339 requires a "
+        "latest_timestamp is declared `format: date-time` (RFC 3339 requires a "
         "UTC offset) but models.py:11 stores a naive DateTime, so the service "
         "serialises '2024-06-01T10:00:00' with no zone"
     ),
@@ -256,7 +255,7 @@ def test_the_404_the_service_actually_returns_is_documented(
 def test_timestamps_conform_to_the_date_time_format_they_declare(
     api_client: TestClient, openapi_schema: dict[str, Any]
 ) -> None:
-    """R16/R6: the service violates its own published `format: date-time`.
+    """The service violates its own published `format: date-time`.
 
     Found by schemathesis, and the reason is worth recording: `format` is an
     *annotation* in JSON Schema, so `jsonschema` ignores it unless given a format
@@ -290,7 +289,7 @@ def test_timestamps_conform_to_the_date_time_format_they_declare(
 
 @pytest.mark.p2
 def test_the_undocumented_404_body_is_at_least_consistent(api_client: TestClient) -> None:
-    """R9, the part that is testable today: the shape clients have to reverse-engineer.
+    """The shape clients have to reverse-engineer.
 
     Since the 404 is absent from the schema, its body is unspecified — so this
     pins what it actually is, giving the eventual `responses={404: ...}` entry

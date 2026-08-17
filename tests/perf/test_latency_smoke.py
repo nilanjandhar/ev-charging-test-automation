@@ -14,9 +14,10 @@ So the budget comes from configuration (`PERF_P95_BUDGET_MS`, default 250 ms), t
 numbers and the environment are printed for the CI log, and the job never gates a
 merge.
 
-Risks covered: **R21** (gross performance regression — an accidental N+1 over the
-report table, a lost index, a synchronous call added to the request path) and the
-affordable slice of **R13** (does the aggregate query degrade with history?).
+Covered here: gross performance regression — an accidental N+1 over the report
+table, a lost index, a synchronous call added to the request path — plus the
+affordable slice of the growth question: does the aggregate query degrade with
+history?
 """
 
 from __future__ import annotations
@@ -92,7 +93,7 @@ def _measure(
 def test_read_and_write_latency_against_a_configured_budget(
     live_client: httpx.Client, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """R21: every documented endpoint answers within the configured p95 budget.
+    """Every documented endpoint answers within the configured p95 budget.
 
     The three endpoints are measured separately because they have different cost
     shapes: `/health` is a constant, `/metrics/summary` runs the latest-per-station
@@ -144,7 +145,7 @@ def test_read_and_write_latency_against_a_configured_budget(
 def test_metrics_latency_does_not_degrade_with_report_volume(
     live_client: httpx.Client, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """R13, the affordable slice: does the aggregate query blow up as history grows?
+    """Does the aggregate query blow up as history grows?
 
     Every read endpoint scans the whole `station_reports` table with a `GROUP BY`
     (`metrics.py:14-31`) and there is no retention or index on `timestamp`, so cost

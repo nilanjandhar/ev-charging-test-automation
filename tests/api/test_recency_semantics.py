@@ -4,9 +4,9 @@ Every read endpoint answers "what is the current state of this station?" with
 `MAX(timestamp)` over a client-supplied field. That single choice produces one
 genuinely good behaviour and two operational hazards, and all three are here.
 
-Risks covered: **R3** (a clock-skewed station pins itself forever), **R6** (UTC
-offsets are dropped rather than normalised), plus the out-of-order property that
-*does* hold and is worth protecting.
+Covered here: a clock-skewed station pinning itself forever, UTC offsets being
+dropped rather than normalised, and the out-of-order property that *does* hold and
+is worth protecting.
 """
 
 from __future__ import annotations
@@ -28,7 +28,7 @@ pytestmark = pytest.mark.api
 def test_status_reflects_the_newest_timestamp_not_the_newest_arrival(
     api_client: TestClient,
 ) -> None:
-    """R3 (the good half): arrival order must not decide station state.
+    """Arrival order must not decide station state.
 
     Field telemetry arrives out of order routinely — a station buffers reports
     while its uplink is down and flushes them all at once, so a two-hour-old
@@ -81,7 +81,7 @@ def test_status_reflects_the_newest_timestamp_not_the_newest_arrival(
 def test_a_future_dated_report_permanently_masks_every_later_report(
     api_client: TestClient,
 ) -> None:
-    """R3: one bad clock and the station is never heard from again.
+    """One bad clock and the station is never heard from again.
 
     A station with a dead RTC or a failed NTP sync stamps its report in 2099.
     Nothing validates that (`schemas.py:8` accepts any datetime), so from then on
@@ -94,7 +94,8 @@ def test_a_future_dated_report_permanently_masks_every_later_report(
 
     Pins current behaviour rather than asserting a fix: the fix is a product
     decision (reject? clamp? rank by the already-stored `created_at`?) and not mine
-    to invent. Written up as R3 so whoever makes it starts from a reproduction.
+    to invent. Written up in TEST_STRATEGY.md so whoever makes it starts from a
+    reproduction.
     """
     sid = station_id()
 
@@ -133,17 +134,17 @@ def test_a_future_dated_report_permanently_masks_every_later_report(
     assert status["flagged"] is False
 
     worklist = assert_status(api_client.get("/stations/poor-hygiene"), 200)
-    assert worklist == [], "R3: a station that is offline with 50 errors is not on the worklist"
+    assert worklist == [], "a station that is offline with 50 errors is not on the worklist"
 
     metrics = assert_status(api_client.get("/metrics/summary"), 200)
-    assert metrics["online_count"] == 1, "R3: and the network counts it as online"
+    assert metrics["online_count"] == 1, "and the network counts it as online"
     assert metrics["offline_count"] == 0
     assert metrics["flagged_count"] == 0
 
 
 @pytest.mark.p1
 def test_utc_offsets_are_dropped_rather_than_normalised(api_client: TestClient) -> None:
-    """R6: two reports of the same instant are not treated as the same instant.
+    """Two reports of the same instant are not treated as the same instant.
 
     `2024-06-01T12:00:00+02:00` and `2024-06-01T10:00:00Z` are the same moment.
     The column is a naive `DateTime` (`models.py:11`), so the offset is discarded
@@ -185,13 +186,13 @@ def test_utc_offsets_are_dropped_rather_than_normalised(api_client: TestClient) 
     assert status["latest_timestamp"] == "2024-06-01T12:00:00"
     assert status["connectivity_status"] == "online"
     assert status["flagged"] is False, (
-        "R6: the +02:00 report of the *same instant* outranks the UTC one and clears the flag"
+        "the +02:00 report of the *same instant* outranks the UTC one and clears the flag"
     )
 
 
 @pytest.mark.p1
 def test_timestamps_lose_their_timezone_on_the_round_trip(api_client: TestClient) -> None:
-    """R6: what goes in as UTC comes back with no zone at all.
+    """What goes in as UTC comes back with no zone at all.
 
     A client POSTs `...T10:00:00Z` and reads back `...T10:00:00` — no `Z`, no
     offset. Every consumer must therefore *assume* a zone, and the dashboard does
@@ -221,7 +222,7 @@ def test_timestamps_lose_their_timezone_on_the_round_trip(api_client: TestClient
 def test_reports_that_tie_on_timestamp_do_not_crash_the_detail_view(
     api_client: TestClient,
 ) -> None:
-    """R1/R11: a tie has to resolve to *something* deterministic per endpoint.
+    """A tie has to resolve to *something* deterministic per endpoint.
 
     Two different readings, one timestamp — a station that re-sends with a
     corrected payload but the same clock reading. `/stations/{id}/status` breaks

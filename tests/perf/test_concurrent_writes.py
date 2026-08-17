@@ -15,7 +15,8 @@ begin with — this suite exists to keep it that way. The plausible regression i
 someone "optimising" ingest into an upsert on `station_id`, at which point
 concurrent writers race and this goes red.
 
-Risks covered: **R11** (torn aggregates), plus the write-path integrity R1 depends on.
+Covered here: torn aggregates, plus the write-path integrity the duplicate-report
+finding depends on.
 """
 
 from __future__ import annotations
@@ -48,7 +49,7 @@ async def _post_all(base_url: str, payloads: list[dict[str, object]]) -> list[in
 @pytest.mark.p0
 @pytest.mark.asyncio
 async def test_concurrent_reports_for_one_station_all_land(live_client: httpx.Client) -> None:
-    """R11: N simultaneous writers, N stored reports, and the final state is one of them.
+    """N simultaneous writers, N stored reports, and the final state is one of them.
 
     Every writer sends a *distinct* timestamp for the same station, so "the correct
     final state" is well defined: the report with the highest timestamp. Anything
@@ -106,7 +107,7 @@ async def test_concurrent_reports_for_one_station_all_land(live_client: httpx.Cl
 async def test_concurrent_writers_across_stations_leave_metrics_consistent(
     live_client: httpx.Client,
 ) -> None:
-    """R11: an aggregate read taken after concurrent writes must not be internally torn.
+    """An aggregate read taken after concurrent writes must not be internally torn.
 
     Different stations, all written at once, then one read of `/metrics/summary`.
     The internal identities have to hold — `online + offline == total`,
@@ -154,7 +155,7 @@ async def test_concurrent_writers_across_stations_leave_metrics_consistent(
 
 @pytest.mark.p2
 def test_repeated_identical_reads_are_stable(live_client: httpx.Client) -> None:
-    """R11: a read with no intervening write must not change under repetition.
+    """A read with no intervening write must not change under repetition.
 
     Cheap guard against a non-deterministic aggregate — a `GROUP BY` whose result
     depends on plan choice, or an ordering that varies between calls. If this ever

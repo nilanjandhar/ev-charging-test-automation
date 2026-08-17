@@ -1,14 +1,13 @@
 """Boundary tests for the hygiene score — the cheapest place to catch the most damage.
 
-Risks covered (see `notes/risk-register.md`):
+What these protect:
 
-* **R7** — a constant in `service/app/scoring.py` is retuned and every station in
-  the fleet re-scores at once. Nothing else in the suite would go red first.
-* **R2** — a fully offline station scores exactly 60.0 and the flag test is
-  `score < 60`, so it is *not* flagged. The single most operationally severe
-  boundary in the service.
-* **R4** — the error penalty saturates at 6 errors, so a station in a hard error
-  loop is scored identically to a mildly unhappy one.
+* A constant in `service/app/scoring.py` is retuned and every station in the fleet
+  re-scores at once. Nothing else in the suite would go red first.
+* A fully offline station scores exactly 60.0 and the flag test is `score < 60`,
+  so it is *not* flagged — the most operationally severe boundary in the service.
+* The error penalty saturates at 6 errors, so a station in a hard error loop is
+  scored identically to a mildly unhappy one.
 
 Every expected value in this file is a literal, hand-computed from
 `service/README.md:61-69`. That is deliberate: importing the service's own
@@ -38,7 +37,7 @@ pytestmark = pytest.mark.unit
         pytest.param("online", 0.0, 5, 75.0, id="errors-5-just-below-cap"),
         pytest.param("online", 0.0, 6, 70.0, id="errors-6-exactly-at-cap"),
         pytest.param("online", 0.0, 7, 70.0, id="errors-7-just-above-cap"),
-        pytest.param("online", 0.0, 100_000, 70.0, id="errors-100k-far-above-cap-R4"),
+        pytest.param("online", 0.0, 100_000, 70.0, id="errors-100k-far-above-cap"),
         # -- latency penalty: /20, saturating at 400 ms ----------------------
         pytest.param("online", 20.0, 0, 99.0, id="latency-20ms-below-cap"),
         pytest.param("online", 399.0, 0, 80.05, id="latency-399ms-just-below-cap"),
@@ -60,7 +59,7 @@ def test_score_at_each_threshold(
     error_count: int,
     expected: float,
 ) -> None:
-    """R7: a change to any scoring constant, divisor or cap must go red here.
+    """A change to any scoring constant, divisor or cap must go red here.
 
     At, just below and just above every threshold in the formula, plus the
     interaction of the two capped penalties.
@@ -80,7 +79,7 @@ def test_score_at_each_threshold(
     ],
 )
 def test_flagging_boundary_is_exclusive(score: float, expected_flagged: bool) -> None:
-    """R7: the flag test is strict `<`, so 60.0 exactly is *not* flagged.
+    """The flag test is strict `<`, so 60.0 exactly is *not* flagged.
 
     `service/README.md:69` says "falls below 60" and `scoring.py:41` implements
     `score < 60.0`. They agree, so this is not a bug report — it is a lock on an
@@ -92,7 +91,7 @@ def test_flagging_boundary_is_exclusive(score: float, expected_flagged: bool) ->
 
 @pytest.mark.p0
 def test_dead_station_reporting_clean_metrics_is_not_flagged() -> None:
-    """R2: an offline station with no errors and no latency scores exactly 60.0.
+    """An offline station with no errors and no latency scores exactly 60.0.
 
     60.0 is not below 60.0, so this station never appears in
     `/stations/poor-hygiene`. A charger that has stopped talking to the network
@@ -103,21 +102,21 @@ def test_dead_station_reporting_clean_metrics_is_not_flagged() -> None:
     specification defect rather than an implementation bug, and it is pinned here
     rather than xfailed: I am not entitled to invent a threshold. The test exists
     so that fixing it is a *deliberate, reviewed* change with a red test to
-    justify, not an accident. Written up as R2 in `TEST_STRATEGY.md`
-    ("Known service issues").
+    justify, not an accident. Written up in `TEST_STRATEGY.md` under "Known service
+    issues".
     """
     score = compute_hygiene_score("offline", latency_ms=0.0, error_count=0)
 
     assert score == 60.0
     assert is_flagged(score) is False, (
-        "R2 has been fixed or the threshold moved — update the known-issues "
+        "this has been fixed or the threshold moved — update the known-issues "
         "section of TEST_STRATEGY.md, this is a behaviour change operators will notice"
     )
 
 
 @pytest.mark.p1
 def test_error_penalty_saturates_so_catastrophe_is_indistinguishable() -> None:
-    """R4: 6 errors and 100,000 errors produce the same score, and neither is flagged.
+    """6 errors and 100,000 errors produce the same score, and neither is flagged.
 
     A station failing every single charging session reports thousands of errors.
     While it stays reachable it scores 70.0 and never reaches the worklist. The
@@ -135,7 +134,7 @@ def test_error_penalty_saturates_so_catastrophe_is_indistinguishable() -> None:
 
 @pytest.mark.p2
 def test_score_floor_is_ten_making_the_zero_clamp_unreachable() -> None:
-    """R7 / dead code: the documented range is [0, 100] but the reachable range is [10, 100].
+    """Dead code: the documented range is [0, 100], the reachable range is [10, 100].
 
     Maximum total penalty is 40 (offline) + 30 (error cap) + 20 (latency cap) = 90,
     so `max(score, 0.0)` at `scoring.py:37` can never fire. Worth pinning for two

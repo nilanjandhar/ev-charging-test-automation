@@ -24,9 +24,10 @@ code. They are listed under [Known service issues](#known-service-issues).
 ## What I test, and how much
 
 The register ([`notes/risk-register.md`](notes/risk-register.md)) scores each
-failure mode by (blast × likelihood) ÷ detection cost. Every test docstring cites a
-risk ID; a test that cannot cite one should not exist. The top of the ranking was
-not what I expected:
+failure mode by (blast × likelihood) ÷ detection cost. It is the reasoning behind
+what to test; the tests themselves name their failure mode in plain words rather
+than cross-referencing an ID, so a docstring is readable without a second file
+open. The top of the ranking was not what I expected:
 
 | Rank | Risk | Statement |
 |---|---|---|

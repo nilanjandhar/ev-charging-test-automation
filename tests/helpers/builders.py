@@ -48,7 +48,7 @@ def at(**delta: float) -> str:
 
 
 def future_timestamp() -> str:
-    """A timestamp far enough ahead that no real report can ever outrank it (risk R3)."""
+    """A timestamp far enough ahead that no real report can ever outrank it."""
     return "2099-01-01T00:00:00+00:00"
 
 

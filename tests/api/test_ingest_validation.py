@@ -10,8 +10,8 @@ Where the defaults are *surprising* relative to the brief, the docstring says so
 explicitly — those are the rows that belong in a client-facing API contract and
 are missing from it today.
 
-Risks covered: **R12** (unbounded input), plus the general contract risk of an
-ingest endpoint that accepts junk.
+These cover unbounded input and the general contract risk of an ingest endpoint
+that accepts junk.
 """
 
 from __future__ import annotations
@@ -238,7 +238,7 @@ def test_station_ids_are_matched_exactly(api_client: TestClient) -> None:
 
 @pytest.mark.p2
 def test_a_large_but_plausible_payload_is_accepted(api_client: TestClient) -> None:
-    """R12: neither `station_id` nor `firmware_version` has an upper length bound.
+    """Neither `station_id` nor `firmware_version` has an upper length bound.
 
     A 10 KB firmware string is accepted and stored verbatim. `schemas.py:6-12` sets
     `min_length=1` on both string fields and no `max_length`, there is no body-size
@@ -269,14 +269,14 @@ def test_a_large_but_plausible_payload_is_accepted(api_client: TestClient) -> No
 @pytest.mark.xfail(
     strict=True,
     reason=(
-        "R17: error_count is declared `integer, ge=0` with no maximum, so 2**63 passes "
+        "error_count is declared `integer, ge=0` with no maximum, so 2**63 passes "
         "validation and then overflows the database driver — an unhandled 500"
     ),
 )
 def test_an_enormous_error_count_is_rejected_rather_than_crashing_ingest(
     api_client_observing_500s: TestClient,
 ) -> None:
-    """R17: schema-valid input that reaches the storage layer and blows up there.
+    """Schema-valid input that reaches the storage layer and blows up there.
 
     Found by schemathesis, which generated exactly 2**63 — one past the signed
     64-bit maximum. Python ints are unbounded so Pydantic accepts it; `models.py:14`
@@ -293,7 +293,7 @@ def test_an_enormous_error_count_is_rejected_rather_than_crashing_ingest(
 
 @pytest.mark.p1
 def test_the_int64_boundary_below_the_crash_is_accepted(api_client: TestClient) -> None:
-    """R17, the other side of the boundary — so the xfail above cannot drift.
+    """The other side of that boundary, so the xfail above cannot drift.
 
     A test that only asserts "2**63 breaks" would keep passing if someone
     accidentally clamped `error_count` to, say, 1000: the crash would be gone and

@@ -13,13 +13,14 @@ non-increasing rather than strict, because the penalties saturate.
 Two more were rejected here entirely — "ingesting the same report twice is
 idempotent" and "status always reflects the newest timestamp". Both are stateful
 properties about HTTP and a database, and the first is not even universally true
-(it holds for `/stations/{id}/status` and is false for `/stations`, risk R1).
+(it holds for `/stations/{id}/status` and is false for `/stations`).
 Driving them through Hypothesis would need a function-scoped database fixture
 shared across examples — the classic anti-pattern — so they are explicit tests in
 `tests/api/` instead.
 
-Risks covered: **R7** (constant regressions), **R4** (saturation blind spot),
-**R2** (an online station with no errors can never be flagged).
+These guard the scoring constants against regression, and state two blind spots as
+invariants rather than examples: the saturation cap, and the fact that an online
+station with no errors can never be flagged at any latency.
 """
 
 from __future__ import annotations
@@ -47,7 +48,7 @@ connectivity = st.sampled_from(["online", "offline"])
 def test_score_stays_inside_its_reachable_range(
     connectivity: str, latency_ms: float, error_count: int
 ) -> None:
-    """R7: no input can push the score outside [10, 100].
+    """No input can push the score outside [10, 100].
 
     The lower bound is 10, not the documented 0: the three penalties sum to at
     most 90. Pinning the tighter bound is what makes this property able to fail —
@@ -69,7 +70,7 @@ def test_score_stays_inside_its_reachable_range(
 def test_more_errors_never_improves_the_score(
     connectivity: str, latency_ms: float, error_count: int, extra_errors: int
 ) -> None:
-    """R7: monotonicity in error_count — non-increasing, not strictly decreasing.
+    """Monotonicity in error_count — non-increasing, not strictly decreasing.
 
     A station that reports *more* problems must never be scored as healthier. The
     weaker "non-increasing" form is the true one because of the -30 cap; asserting
@@ -92,7 +93,7 @@ def test_more_errors_never_improves_the_score(
 def test_more_latency_never_improves_the_score(
     connectivity: str, latency_ms: float, error_count: int, extra_latency: float
 ) -> None:
-    """R7: monotonicity in latency_ms — a slower station is never scored healthier."""
+    """Monotonicity in latency_ms — a slower station is never scored healthier."""
     baseline = compute_hygiene_score(connectivity, latency_ms, error_count)
     worse = compute_hygiene_score(connectivity, latency_ms + extra_latency, error_count)
 
@@ -109,7 +110,7 @@ def test_more_latency_never_improves_the_score(
 def test_score_is_blind_to_error_count_above_the_cap(
     connectivity: str, latency_ms: float, error_count: int, other_error_count: int
 ) -> None:
-    """R4: above 6 errors the score carries no information about error volume.
+    """Above 6 errors the score carries no information about error volume.
 
     This is the saturation blind spot stated as an invariant rather than as a
     single example: from 6 errors upwards, a station reporting a handful of faults
@@ -128,10 +129,10 @@ def test_score_is_blind_to_error_count_above_the_cap(
 def test_going_offline_costs_forty_points_give_or_take_the_rounding(
     latency_ms: float, error_count: int
 ) -> None:
-    """R7 / R15: the offline penalty is independent of the other two terms — to within 0.01.
+    """The offline penalty is independent of the other two terms — to within 0.01.
 
     I first wrote this as `online - offline == approx(40.0)` and Hypothesis
-    falsified it in under a second. The reason is R15: `scoring.py:37` rounds the
+    falsified it in under a second. The reason: `scoring.py:37` rounds the
     *final* score, and `round()` is half-even over binary floats, so the two
     scores can round in opposite directions. At `latency_ms=0.1` the difference is
     40.01; at `latency_ms=0.5` it is 39.99.
@@ -150,7 +151,7 @@ def test_going_offline_costs_forty_points_give_or_take_the_rounding(
 @pytest.mark.p0
 @given(latency_ms=latency)
 def test_an_online_station_with_no_errors_can_never_be_flagged(latency_ms: float) -> None:
-    """R2: latency alone is never enough to flag a station, at any value.
+    """Latency alone is never enough to flag a station, at any value.
 
     Best-case penalty from latency alone is 20 points, so the floor is 80. A
     charger that is reachable and error-free but takes ten seconds to answer —
@@ -169,7 +170,7 @@ def test_an_online_station_with_no_errors_can_never_be_flagged(latency_ms: float
 def test_flag_agrees_with_the_threshold_for_every_input(
     connectivity: str, latency_ms: float, error_count: int
 ) -> None:
-    """R7: `flagged` is exactly `score < FLAGGING_THRESHOLD`, with no drift.
+    """`flagged` is exactly `score < FLAGGING_THRESHOLD`, with no drift.
 
     The service computes the score and the flag in two separate calls
     (`reports.py:13-18`) and stores both. This is the property that keeps them
@@ -188,7 +189,7 @@ def test_flag_agrees_with_the_threshold_for_every_input(
     error_count=errors,
 )
 def test_scoring_is_pure(connectivity: str, latency_ms: float, error_count: int) -> None:
-    """R7: identical inputs always produce identical outputs.
+    """Identical inputs always produce identical outputs.
 
     Cheap, and it is the guard against the one change that would make every other
     test in this file lie: a scoring function that reaches for `datetime.now()`,
@@ -209,12 +210,12 @@ def test_scoring_is_pure(connectivity: str, latency_ms: float, error_count: int)
 def test_flagging_requires_more_than_connectivity_loss_alone(
     latency_ms: float, error_count: int
 ) -> None:
-    """R2, stated from the other side: what does it take to flag an offline station?
+    """What does it take to flag an offline station?
 
     An offline station starts at exactly 60.0, on the wrong side of a strict `<`,
     so connectivity loss alone is never enough — it must also report latency or
     errors. My first version of this assumed *any* non-zero latency was enough;
-    Hypothesis falsified it with `latency_ms=1e-9`, which is R15: a penalty below
+    Hypothesis falsified it with `latency_ms=1e-9` — a penalty below
     0.005 rounds away and the station lands back on 60.0 exactly.
 
     So the true precondition is "a penalty that survives rounding to two
@@ -236,7 +237,7 @@ def test_flagging_requires_more_than_connectivity_loss_alone(
 def test_offline_station_with_sub_threshold_latency_rounds_back_to_unflagged(
     latency_ms: float,
 ) -> None:
-    """R15: R2's blind spot is an interval, not a single point.
+    """The offline blind spot is an interval, not a single point.
 
     Found by Hypothesis while falsifying the property above. Rounding to two
     decimals happens *after* the penalties are subtracted, so every offline
@@ -256,7 +257,7 @@ def test_offline_station_with_sub_threshold_latency_rounds_back_to_unflagged(
 
 @pytest.mark.p1
 def test_rounding_step_can_decide_the_flag() -> None:
-    """R15: at the boundary the last 0.01 is settled by binary float rounding.
+    """At the boundary the last 0.01 is settled by binary float rounding.
 
     0.1 ms of latency on an offline station gives a true score of 59.995 — dead on
     the half-step. Python rounds half to even *over the binary representation*, so
