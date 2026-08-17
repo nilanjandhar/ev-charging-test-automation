@@ -147,10 +147,10 @@ error rather than a silently-skipped test: `unit`, `contract`, `api`, `e2e`,
 python tools/mutation_check.py
 ```
 
-It copies `service/` to a scratch directory, breaks it in eleven specific ways,
-and reports which tests died. `service/` itself is never touched. Ten mutants are
-real bugs and must be killed; the eleventh is a no-op control that must survive —
-without it, "everything went red" would be unfalsifiable. Last run:
+It copies `service/` to a scratch directory, breaks it in sixteen specific ways,
+and reports which tests died. `service/` itself is never touched. Fifteen mutants
+are real bugs and must be killed; the sixteenth is a no-op control that must
+survive — without it, "everything went red" would be unfalsifiable. Last run:
 [notes/mutation-check.md](notes/mutation-check.md).
 
 ## A note on what is red on purpose
