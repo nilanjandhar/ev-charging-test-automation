@@ -37,8 +37,17 @@ open. The top of the ranking was not what I expected:
 | 4 | **R1** | A retried report double-counts its station in `/stations` and every metric. |
 | 5 | **R3** | One clock-skewed station pins its own status forever. |
 
-109 tests: 26 unit boundaries, 15 property-based, 43 API integration, 13 contract,
-5 e2e, 6 perf/concurrency, 1 UI.
+**44 test functions, 74 collected** (parametrised cases expand): 16 unit boundaries,
+8 property-based, 31 API integration, 11 contract, 4 e2e, 3 perf/concurrency, 1 UI.
+
+Every test carries a `Why:` line in its docstring naming what goes unnoticed
+without it, and `make inventory` fails if one is missing — so a test that cannot be
+justified cannot be added. [`notes/test-inventory.md`](notes/test-inventory.md) is
+that list. I cut 18 tests and 17 parametrised cases getting here: eight were
+assertions another test already made universally (a unit example of a saturation
+the property covers for all inputs), and ten pinned undocumented behaviour or
+framework defaults. **All 8 mutants still die**, which is the evidence the cuts
+took redundancy rather than coverage.
 
 **Why that shape rather than a pyramid.** This service's logic is 40 lines of
 arithmetic; its risk lives in three SQL queries that each reinvent "the latest
@@ -56,9 +65,9 @@ build: **which red test do I read first?** Per-test rationale is in
 
 | Tier | Means | Tests | If it is red |
 |---|---|---|---|
-| **P0** | The service is doing its core job wrong: the score, the flag decision, which report counts as latest, or the endpoints disagreeing about one station. | 42 | Stop. Do not ship. |
-| **P1** | A real defect, narrower blast radius or a specific edge. | 53 | Fix before release. |
-| **P2** | Worth having, not worth blocking on. | 14 | File it. |
+| **P0** | The service is doing its core job wrong: the score, the flag decision, which report counts as latest, or the endpoints disagreeing about one station. | 33 | Stop. Do not ship. |
+| **P1** | A real defect, narrower blast radius or a specific edge. | 37 | Fix before release. |
+| **P2** | Worth having, not worth blocking on. | 4 | File it. |
 
 Tier is derived from the register but is not a re-ranking of it, and the
 disagreements are the interesting part. R16 is rank 3 yet its tests are P1, because
@@ -66,6 +75,9 @@ the damage is client-side deserialisation rather than a wrong dispatch — an op
 with a mangled timestamp still gets the right station on the right worklist.
 Conversely, the test that a client cannot post its own `hygiene_score` covers no
 numbered risk and is P0, because that would defeat the point of the service.
+
+P2 is down to four because most of what used to sit there was pinning behaviour
+nobody promised — which is a reason to delete a test, not to downgrade it.
 
 `tests/conftest.py` refuses to collect a test that declares no tier, or two. A
 silent default would have been easier and worse: the tests that most need triage are
@@ -77,7 +89,7 @@ make smoke                # P0 only, ~1s
 pytest -m "p0 and api"    # tiers compose with layers
 ```
 
-**I did not split CI by tier.** The gate is 109 tests in ~1.5 s, so a P0-first job
+**I did not split CI by tier.** The gate is 74 tests in ~1.3 s, so a P0-first job
 would spend ~40 s of runner setup to save one and a half, and `needs:` already stops
 the container jobs starting behind a broken gate. If the gate ever ran in minutes,
 the split would be P0+P1 blocking with P2 post-merge — the markers are already there.

@@ -17,8 +17,9 @@ status and network metrics. The service is in [`service/`](service/) and is
   eight service defects found.
 - **[AI_USAGE.md](AI_USAGE.md)** — how I used an AI assistant: one output accepted,
   one substantially rewritten, one rejected.
-- **[notes/test-inventory.md](notes/test-inventory.md)** — every test and its
-  priority tier, in one table. Regenerate with `make inventory`.
+- **[notes/test-inventory.md](notes/test-inventory.md)** — all 44 tests, each with
+  its priority tier and a one-line justification for existing. Regenerate with
+  `make inventory`, which *fails* if any test lacks one.
 - **[notes/](notes/)** — the working artifacts behind the strategy: behaviour
   inventory, risk register, Docker-vs-local analysis, mutation-check output, and
   the raw AI journal.
@@ -61,12 +62,12 @@ risk register — full reasoning in
 
 | Tier | Means | Tests |
 |---|---|---|
-| **P0** | The service is doing its core job wrong: the score, the flag decision, which report counts as latest, or the endpoints disagreeing about one station. Stop and fix. | 42 |
-| **P1** | A real defect with a narrower blast radius, or a specific edge. Fix before release. | 53 |
-| **P2** | Worth having, not worth blocking on. File it. | 14 |
+| **P0** | The service is doing its core job wrong: the score, the flag decision, which report counts as latest, or the endpoints disagreeing about one station. Stop and fix. | 33 |
+| **P1** | A real defect with a narrower blast radius, or a specific edge. Fix before release. | 37 |
+| **P2** | Worth having, not worth blocking on. File it. | 4 |
 
 ```bash
-make smoke        # P0 only — 37 tests, ~1s. What to run when you have seconds
+make smoke        # P0 only — 30 tests, ~1s. What to run when you have seconds
 make test-p0      # same thing, spelled out
 make test-p1
 make test-p2
@@ -190,5 +191,5 @@ They are catalogued in [TEST_STRATEGY.md](TEST_STRATEGY.md#known-service-issues)
 Expected output of `make test`:
 
 ```
-86 passed, 18 deselected, 5 xfailed
+55 passed, 14 deselected, 5 xfailed
 ```

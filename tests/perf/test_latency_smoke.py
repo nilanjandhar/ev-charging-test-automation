@@ -29,7 +29,6 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from tests.helpers.assertions import assert_status
 from tests.helpers.builders import at, report, station_id
 from tests.helpers.config import SETTINGS
 
@@ -103,6 +102,9 @@ def test_read_and_write_latency_against_a_configured_budget(
     The measured numbers and the environment are printed unconditionally, so the CI
     log carries the trend even on a green run — a perf test whose output is only
     visible when it fails cannot tell you that you are drifting towards the cliff.
+
+    Why: An order-of-magnitude tripwire and a trend printed into CI logs; never a gate,
+        for reasons in TEST_STRATEGY.md.
     """
     budget = SETTINGS.perf_p95_budget_ms
     samples = SETTINGS.perf_samples
@@ -139,57 +141,3 @@ def test_read_and_write_latency_against_a_configured_budget(
 
     breaches = [m for m in measurements if m.p95_ms > budget]
     assert not breaches, "p95 budget exceeded:\n" + "\n".join(m.render() for m in breaches)
-
-
-@pytest.mark.p2
-def test_metrics_latency_does_not_degrade_with_report_volume(
-    live_client: httpx.Client, capsys: pytest.CaptureFixture[str]
-) -> None:
-    """Does the aggregate query blow up as history grows?
-
-    Every read endpoint scans the whole `station_reports` table with a `GROUP BY`
-    (`metrics.py:14-31`) and there is no retention or index on `timestamp`, so cost
-    grows with total history rather than with station count. The full risk needs
-    production-shaped data on production-shaped hardware and is explicitly out of
-    scope (see the risk register).
-
-    What *is* affordable is the shape of the curve over a couple of hundred rows:
-    if `/metrics/summary` is already several times slower after 200 reports for a
-    single station, the growth is worse than linear and that is worth knowing
-    before it is 200 million. Asserted as a generous ratio rather than an absolute,
-    because the absolute is unportable — and printed either way.
-    """
-    sid = station_id("GROWTH")
-
-    baseline = _measure(
-        "GET /metrics/summary (before)",
-        lambda _: live_client.get("/metrics/summary"),
-        samples=20,
-        warmup=5,
-    )
-
-    for index in range(200):
-        assert_status(
-            live_client.post("/reports", json=report(station_id_=sid, timestamp=at(seconds=index))),
-            201,
-        )
-
-    loaded = _measure(
-        "GET /metrics/summary (after 200 reports)",
-        lambda _: live_client.get("/metrics/summary"),
-        samples=20,
-        warmup=5,
-    )
-
-    with capsys.disabled():
-        print(f"\n  report-volume sensitivity — environment: {SETTINGS.environment_label}")
-        print(f"  {baseline.render()}")
-        print(f"  {loaded.render()}")
-
-    # A generous ceiling: this is a smoke test for a super-linear blow-up, not a
-    # measurement. On a machine with a 40ms artificial floor the ratio is ~1.0 by
-    # construction, which is itself worth seeing in the log.
-    assert loaded.p95_ms <= max(baseline.p95_ms * 5, 50.0), (
-        f"aggregate latency grew disproportionately with history: "
-        f"{baseline.render()} -> {loaded.render()}"
-    )

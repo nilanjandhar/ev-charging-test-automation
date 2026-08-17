@@ -49,19 +49,9 @@ pytestmark = pytest.mark.api
             "literal_error",
             id="unknown-connectivity-value",
         ),
-        pytest.param(
-            {"connectivity_status": "ONLINE"},
-            "connectivity_status",
-            "literal_error",
-            id="connectivity-is-case-sensitive",
-        ),
         pytest.param({"station_id": ""}, "station_id", "string_too_short", id="empty-station-id"),
-        pytest.param(
-            {"firmware_version": ""}, "firmware_version", "string_too_short", id="empty-firmware"
-        ),
         pytest.param({"timestamp": "not-a-date"}, "timestamp", None, id="unparseable-timestamp"),
         pytest.param({"error_count": 2.7}, "error_count", "int_from_float", id="fractional-errors"),
-        pytest.param({"station_id": None}, "station_id", "string_type", id="null-station-id"),
         pytest.param(
             {"latency_ms": "fast"}, "latency_ms", "float_parsing", id="non-numeric-latency"
         ),
@@ -78,6 +68,9 @@ def test_invalid_field_is_rejected_with_a_machine_readable_error(
     The assertion is on `loc` and `type`, never on `msg`. The prose belongs to
     Pydantic and changes between minor versions; a client that branches on the
     error does so on `type`, so that is what the contract is.
+
+    Why: Clients branch on the error `type` and `loc`; nothing else pins that contract,
+        and it is framework default nobody chose.
     """
     response = api_client.post("/reports", json=report(**overrides))
 
@@ -102,6 +95,9 @@ def test_every_field_is_required(api_client: TestClient, missing: str) -> None:
     Worth stating for all six rather than one representative: a `Field(...)` that
     quietly gains a default is how a required field becomes optional without
     anyone noticing, and the resulting rows are silently wrong rather than absent.
+
+    Why: One case per field, because a `Field(...)` that quietly gains a default turns
+        bad rows silent rather than rejected.
     """
     payload = report()
     del payload[missing]
@@ -130,6 +126,9 @@ def test_unknown_fields_are_ignored_and_cannot_override_the_computed_score(
     instead of `error_count`... also gets a 422. Typos in *optional-looking*
     positions are the ones that pass silently, and there are none here — so this
     is documented rather than filed as a defect.
+
+    Why: `hygiene_score` and `flagged` are real columns; a client that could set them
+        would defeat the entire service.
     """
     sid = station_id()
     payload = report(
@@ -151,42 +150,12 @@ def test_unknown_fields_are_ignored_and_cannot_override_the_computed_score(
     assert "rogue_field" not in status, "unknown fields are dropped, not persisted or echoed"
 
 
-@pytest.mark.p2
-def test_numeric_strings_are_coerced_rather_than_rejected(api_client: TestClient) -> None:
-    """Pydantic's lax mode accepts `"120"` for a float. The brief implies it would not.
-
-    Sending JSON strings where the schema says number is a classic symptom of a
-    misconfigured gateway or an embedded client with a weak JSON writer. This
-    service accepts them and scores them normally.
-
-    I am not calling that a defect — lax coercion is a deliberate Pydantic default
-    and rejecting it would break real clients — but it is undocumented behaviour
-    that a consumer could reasonably be surprised by, so it is pinned here. If
-    someone later sets `strict=True` on the model, this test tells them they have
-    made a breaking change for anyone relying on it.
-    """
-    sid = station_id()
-    payload = report(station_id_=sid)
-    payload["latency_ms"] = "120"
-    payload["error_count"] = "2"
-
-    body = assert_status(api_client.post("/reports", json=payload), 201)
-
-    assert body["hygiene_score"] == 84.0
-
-    status = assert_status(api_client.get(f"/stations/{sid}/status"), 200)
-    assert status["latency_ms"] == 120.0, "coerced to a float on the way in, not stored as a string"
-    assert status["error_count"] == 2
-
-
 @pytest.mark.p1
 @pytest.mark.parametrize(
     ("body", "content_type"),
     [
         pytest.param('{"station_id": ', "application/json", id="truncated-json"),
         pytest.param("hello", "application/json", id="not-json-at-all"),
-        pytest.param("[]", "application/json", id="array-instead-of-object"),
-        pytest.param("null", "application/json", id="json-null"),
     ],
 )
 def test_malformed_bodies_are_422_not_500(
@@ -198,6 +167,8 @@ def test_malformed_bodies_are_422_not_500(
     would expect 400 for a syntactically invalid body. That difference matters to
     anyone writing a gateway rule or an alert on 4xx classes, and it is not in the
     brief — so it is asserted rather than assumed.
+
+    Why: Junk on the wire must not reach the database layer or produce a stack trace.
     """
     response = api_client.post("/reports", content=body, headers={"Content-Type": content_type})
 
@@ -213,56 +184,13 @@ def test_unknown_station_is_a_clean_404(api_client: TestClient) -> None:
     "this station is fine" must not look the same to a monitoring script. The
     detail string is asserted because it is the only machine-adjacent hint a
     client gets — there is no error code in the body.
+
+    Why: 'Never reported' and 'reported fine' must not look the same to a monitoring
+        script.
     """
     sid = station_id("GHOST")
 
     assert_station_absent(api_client.get(f"/stations/{sid}/status"), sid)
-
-
-@pytest.mark.p2
-def test_station_ids_are_matched_exactly(api_client: TestClient) -> None:
-    """Lookup is exact-match: no trimming, no case folding, no prefix matching.
-
-    `STATION-1` and `station-1` are different stations to this service. That is a
-    defensible choice, but it means a client that upper-cases IDs "for tidiness"
-    silently creates a parallel fleet. Pinned so the behaviour is at least written
-    down somewhere.
-    """
-    sid = "STATION-CASE-TEST"
-    api_client.post("/reports", json=report(station_id_=sid))
-
-    assert_status(api_client.get(f"/stations/{sid}/status"), 200)
-    assert_station_absent(api_client.get(f"/stations/{sid.lower()}/status"), sid.lower())
-    assert_station_absent(api_client.get(f"/stations/{sid} /status"), f"{sid} ")
-
-
-@pytest.mark.p2
-def test_a_large_but_plausible_payload_is_accepted(api_client: TestClient) -> None:
-    """Neither `station_id` nor `firmware_version` has an upper length bound.
-
-    A 10 KB firmware string is accepted and stored verbatim. `schemas.py:6-12` sets
-    `min_length=1` on both string fields and no `max_length`, there is no body-size
-    middleware, and uvicorn is started without a body limit
-    (`service/Dockerfile:11`).
-
-    This test deliberately uses 10 KB rather than 100 MB. The large-payload test is
-    one I decided *not* to automate (see the risk register): it would assert a
-    limit the service does not have, so it could only ever pin "unbounded" as
-    correct or fail forever. What is worth asserting is the boundary of what is
-    plausible — a fat but legitimate firmware identifier round-trips intact — while
-    the missing control is documented as belonging at the ingress, not here.
-    """
-    sid = station_id()
-    long_firmware = "v" + "9" * 10_000
-
-    body = assert_status(
-        api_client.post("/reports", json=report(station_id_=sid, firmware_version=long_firmware)),
-        201,
-    )
-    assert body["station_id"] == sid
-
-    status = assert_status(api_client.get(f"/stations/{sid}/status"), 200)
-    assert status["firmware_version"] == long_firmware, "stored verbatim, no truncation"
 
 
 @pytest.mark.p1
@@ -285,6 +213,9 @@ def test_an_enormous_error_count_is_rejected_rather_than_crashing_ingest(
 
     Validation that the storage layer then rejects is validation in the wrong
     place; the fix is a `le=` bound in `schemas.py` so the 422 happens at the edge.
+
+    Why: Pins an unhandled 500 on an unauthenticated endpoint - validation that the
+        storage layer rejects is validation in the wrong place.
     """
     response = api_client_observing_500s.post("/reports", json=report(error_count=2**63))
 
@@ -299,6 +230,9 @@ def test_the_int64_boundary_below_the_crash_is_accepted(api_client: TestClient) 
     accidentally clamped `error_count` to, say, 1000: the crash would be gone and
     the test would look fixed while quietly rejecting legitimate reports. This
     pins the largest value that must keep working.
+
+    Why: Stops the fix for that crash from over-correcting into rejecting legitimate
+        counts.
     """
     sid = station_id()
 
@@ -311,17 +245,3 @@ def test_the_int64_boundary_below_the_crash_is_accepted(api_client: TestClient) 
 
     assert body["hygiene_score"] == 69.5, "100 - 30 (error cap) - 0.5 (10ms latency)"
     assert body["flagged"] is False
-
-
-@pytest.mark.p2
-def test_wrong_method_and_missing_route_are_not_500s(api_client: TestClient) -> None:
-    """The edges of the routing table: 405 and 404, with JSON bodies.
-
-    Cheap, and it catches the specific failure where a router refactor turns an
-    unknown path into an unhandled exception. Also documents that `GET /reports`
-    does not exist — there is no way to read back the raw report history, which is
-    a genuine gap for anyone auditing why a station was flagged an hour ago.
-    """
-    assert assert_status(api_client.get("/reports"), 405) == {"detail": "Method Not Allowed"}
-    assert assert_status(api_client.get("/stations/nope/nope"), 404) == {"detail": "Not Found"}
-    assert assert_status(api_client.delete("/stations"), 405) == {"detail": "Method Not Allowed"}

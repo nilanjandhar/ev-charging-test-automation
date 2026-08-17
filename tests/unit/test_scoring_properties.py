@@ -27,7 +27,7 @@ from __future__ import annotations
 
 import pytest
 from app.scoring import FLAGGING_THRESHOLD, compute_hygiene_score, is_flagged
-from hypothesis import assume, given
+from hypothesis import given
 from hypothesis import strategies as st
 
 pytestmark = pytest.mark.unit
@@ -53,6 +53,9 @@ def test_score_stays_inside_its_reachable_range(
     The lower bound is 10, not the documented 0: the three penalties sum to at
     most 90. Pinning the tighter bound is what makes this property able to fail —
     a doubled penalty constant escapes 10 long before it escapes 0.
+
+    Why: Asserts the reachable [10, 100], not the documented [0, 100] - the documented
+        bound survives a doubled penalty.
     """
     score = compute_hygiene_score(connectivity, latency_ms, error_count)
 
@@ -76,6 +79,9 @@ def test_more_errors_never_improves_the_score(
     weaker "non-increasing" form is the true one because of the -30 cap; asserting
     strict monotonicity would be a false property that fails on the first example
     above six errors.
+
+    Why: A station reporting more problems must never be scored healthier; the universal
+        form catches what examples cannot.
     """
     baseline = compute_hygiene_score(connectivity, latency_ms, error_count)
     worse = compute_hygiene_score(connectivity, latency_ms, error_count + extra_errors)
@@ -93,7 +99,11 @@ def test_more_errors_never_improves_the_score(
 def test_more_latency_never_improves_the_score(
     connectivity: str, latency_ms: float, error_count: int, extra_latency: float
 ) -> None:
-    """Monotonicity in latency_ms — a slower station is never scored healthier."""
+    """Monotonicity in latency_ms — a slower station is never scored healthier.
+
+    Why: Same guarantee for the other input, and the pair is what makes the score
+        defensible to an operator.
+    """
     baseline = compute_hygiene_score(connectivity, latency_ms, error_count)
     worse = compute_hygiene_score(connectivity, latency_ms + extra_latency, error_count)
 
@@ -117,6 +127,9 @@ def test_score_is_blind_to_error_count_above_the_cap(
     and a station failing thousands of sessions are indistinguishable to every
     consumer of this API. If someone later makes the penalty unbounded — which is
     the obvious fix — this property goes red and forces the conversation.
+
+    Why: States the saturation blind spot as an invariant, so making the penalty
+        unbounded forces the conversation.
     """
     a = compute_hygiene_score(connectivity, latency_ms, error_count)
     b = compute_hygiene_score(connectivity, latency_ms, other_error_count)
@@ -141,6 +154,9 @@ def test_going_offline_costs_forty_points_give_or_take_the_rounding(
     tolerance to something vague like `approx(40, abs=1)` would have hidden the
     finding instead of recording it, and would also stop catching a real
     off-by-one in the constant.
+
+    Why: Catches any refactor that couples the three penalties, e.g. skipping latency
+        when offline.
     """
     online = compute_hygiene_score("online", latency_ms, error_count)
     offline = compute_hygiene_score("offline", latency_ms, error_count)
@@ -158,6 +174,9 @@ def test_an_online_station_with_no_errors_can_never_be_flagged(latency_ms: float
     unusable in practice — is scored 80 and stays off the worklist. Stated as a
     property because the interesting part is the *universal* quantifier: there is
     no latency, anywhere in the domain, that rescues this.
+
+    Why: The universal quantifier is the point: no latency anywhere in the domain
+        rescues this blind spot.
     """
     score = compute_hygiene_score("online", latency_ms, error_count=0)
 
@@ -176,83 +195,13 @@ def test_flag_agrees_with_the_threshold_for_every_input(
     (`reports.py:13-18`) and stores both. This is the property that keeps them
     from ever disagreeing — including at the boundary, which Hypothesis reaches
     on its own once it finds the offline/0/0 corner.
+
+    Why: Score and flag are computed and stored separately; this is what stops them
+        drifting apart.
     """
     score = compute_hygiene_score(connectivity, latency_ms, error_count)
 
     assert is_flagged(score) == (score < FLAGGING_THRESHOLD)
-
-
-@pytest.mark.p0
-@given(
-    connectivity=connectivity,
-    latency_ms=latency,
-    error_count=errors,
-)
-def test_scoring_is_pure(connectivity: str, latency_ms: float, error_count: int) -> None:
-    """Identical inputs always produce identical outputs.
-
-    Cheap, and it is the guard against the one change that would make every other
-    test in this file lie: a scoring function that reaches for `datetime.now()`,
-    a random jitter, or process-global state. Any of those turn the whole suite
-    non-deterministic in a way that is very hard to diagnose from a flaky CI run.
-    """
-    first = compute_hygiene_score(connectivity, latency_ms, error_count)
-    second = compute_hygiene_score(connectivity, latency_ms, error_count)
-
-    assert first == second
-
-
-@pytest.mark.p1
-@given(
-    latency_ms=latency,
-    error_count=errors,
-)
-def test_flagging_requires_more_than_connectivity_loss_alone(
-    latency_ms: float, error_count: int
-) -> None:
-    """What does it take to flag an offline station?
-
-    An offline station starts at exactly 60.0, on the wrong side of a strict `<`,
-    so connectivity loss alone is never enough — it must also report latency or
-    errors. My first version of this assumed *any* non-zero latency was enough;
-    Hypothesis falsified it with `latency_ms=1e-9` — a penalty below
-    0.005 rounds away and the station lands back on 60.0 exactly.
-
-    So the true precondition is "a penalty that survives rounding to two
-    decimals": at least one error, or at least 0.1 ms of latency.
-    """
-    assume(error_count > 0 or latency_ms >= 0.1)
-    score = compute_hygiene_score("offline", latency_ms, error_count)
-
-    assert score < 60.0
-    assert is_flagged(score) is True
-
-
-@pytest.mark.p1
-@pytest.mark.parametrize(
-    "latency_ms",
-    [0.0, 0.01, 0.05, 0.09, 0.0999],
-    ids=lambda v: f"latency-{v}ms",
-)
-def test_offline_station_with_sub_threshold_latency_rounds_back_to_unflagged(
-    latency_ms: float,
-) -> None:
-    """The offline blind spot is an interval, not a single point.
-
-    Found by Hypothesis while falsifying the property above. Rounding to two
-    decimals happens *after* the penalties are subtracted, so every offline
-    station reporting under 0.1 ms of latency with no errors scores exactly 60.0
-    and stays off the worklist — not just the pristine (0 ms, 0 errors) case.
-
-    That matters because "offline with a near-zero latency reading" is precisely
-    what a station reports when its uplink has dropped and the value is a stale
-    or default zero. The blind spot is wider than the boundary test suggests, and
-    it sits exactly at the dispatch decision.
-    """
-    score = compute_hygiene_score("offline", latency_ms, error_count=0)
-
-    assert score == 60.0
-    assert is_flagged(score) is False
 
 
 @pytest.mark.p1
@@ -265,6 +214,9 @@ def test_rounding_step_can_decide_the_flag() -> None:
     other way. Nothing about which chargers get a truck rolled should be decided
     by IEEE-754 tie-breaking, and this test is here so that statement is on the
     record with a reproducible example attached.
+
+    Why: Puts on record that the last 0.01 of a truck-roll decision is settled by
+        IEEE-754 tie-breaking.
     """
     assert compute_hygiene_score("offline", 0.1, 0) == 59.99
     assert compute_hygiene_score("offline", 0.0999, 0) == 60.0

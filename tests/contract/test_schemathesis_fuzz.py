@@ -158,6 +158,9 @@ def test_operation_conforms_to_its_published_schema(case: Case) -> None:
     One test per documented operation, so a failure names the endpoint rather than
     "the fuzz suite". Failures that are already-documented service defects are
     tolerated by risk ID; anything unrecognised fails the build.
+
+    Why: Covers the inputs I did not think of; it found both the naive-datetime and the
+        integer-overflow defects.
     """
     from schemathesis.core.failures import FailureGroup
 

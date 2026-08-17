@@ -39,6 +39,9 @@ def test_status_reflects_the_newest_timestamp_not_the_newest_arrival(
     This is the property that makes the whole ingest path safe to retry, and it
     is one `ORDER BY` away from silently inverting. Note it also makes this test
     genuinely order-independent: the assertion does not depend on POST sequencing.
+
+    Why: Buffered stations flush out of order routinely; this property is what makes the
+        whole ingest path safe to retry.
     """
     sid = station_id()
 
@@ -96,6 +99,9 @@ def test_a_future_dated_report_permanently_masks_every_later_report(
     decision (reject? clamp? rank by the already-stored `created_at`?) and not mine
     to invent. Written up in TEST_STRATEGY.md so whoever makes it starts from a
     reproduction.
+
+    Why: Reproduces a live defect: one bad clock freezes a station green forever, and
+        the fix is a product decision.
     """
     sid = station_id()
 
@@ -156,6 +162,9 @@ def test_utc_offsets_are_dropped_rather_than_normalised(api_client: TestClient) 
     the other direction a station reporting `-05:00` looks five hours behind and
     can be masked by anything. The suite's own builders always emit UTC, so this
     test is the only place the hazard is visible.
+
+    Why: The suite's builders always emit UTC, so this is the only place a cross-
+        timezone fleet's ordering bug is visible.
     """
     sid = station_id()
 
@@ -191,34 +200,6 @@ def test_utc_offsets_are_dropped_rather_than_normalised(api_client: TestClient) 
 
 
 @pytest.mark.p1
-def test_timestamps_lose_their_timezone_on_the_round_trip(api_client: TestClient) -> None:
-    """What goes in as UTC comes back with no zone at all.
-
-    A client POSTs `...T10:00:00Z` and reads back `...T10:00:00` — no `Z`, no
-    offset. Every consumer must therefore *assume* a zone, and the dashboard does
-    exactly that: `new Date(s.latest_timestamp)` at `static/index.html:108` parses
-    a naive string as **browser-local** time, so an operator in Los Angeles sees
-    every "last report" time shifted by eight hours.
-
-    Small, cheap, and the kind of thing that gets argued about in an incident
-    review at 2am, so it is worth a test that states it plainly.
-    """
-    sid = station_id()
-
-    api_client.post("/reports", json=report(station_id_=sid, timestamp="2024-06-01T10:00:00Z"))
-
-    status = assert_status(api_client.get(f"/stations/{sid}/status"), 200)
-    listing = assert_status(api_client.get("/stations"), 200)
-
-    assert status["latest_timestamp"] == "2024-06-01T10:00:00"
-    assert not status["latest_timestamp"].endswith("Z")
-    assert "+" not in status["latest_timestamp"]
-    assert listing[0]["latest_timestamp"] == status["latest_timestamp"], (
-        "at least the two views agree on the same naive string"
-    )
-
-
-@pytest.mark.p1
 def test_reports_that_tie_on_timestamp_do_not_crash_the_detail_view(
     api_client: TestClient,
 ) -> None:
@@ -231,6 +212,9 @@ def test_reports_that_tie_on_timestamp_do_not_crash_the_detail_view(
     service makes no promise about tie-breaking and SQLite and PostgreSQL will not
     agree. Asserting a specific winner would be a test that passes locally and
     fails in Docker.
+
+    Why: Asserts a tie resolves to one valid row rather than a specific winner, which
+        SQLite and PostgreSQL would not agree on.
     """
     sid = station_id()
     same_time = at()

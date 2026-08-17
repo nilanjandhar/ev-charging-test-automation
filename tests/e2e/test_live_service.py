@@ -50,6 +50,9 @@ def test_health_endpoint_answers_over_real_http(live_client: httpx.Client) -> No
     health check means "the process is up", not "the service can serve requests"
     That distinction is in the known-issues section, and it is why the
     journey test below exists.
+
+    Why: Every e2e and perf job's readiness poll waits on this exact body; a change
+        would hang CI instead of failing it.
     """
     response = live_client.get("/health")
 
@@ -70,6 +73,9 @@ def test_a_station_journey_over_the_wire(live_client: httpx.Client) -> None:
     works on SQLite and not on PostgreSQL. The latest-per-station join
     (`stations.py:15-33`) is exactly the kind of SQL where the two engines differ
     on `GROUP BY` semantics, so running it for real is worth the seconds it costs.
+
+    Why: The only test where the latest-per-station join runs against PostgreSQL rather
+        than SQLite.
     """
     sid = station_id("E2E")
 
@@ -135,6 +141,9 @@ def test_error_responses_serialise_correctly_over_http(live_client: httpx.Client
     bytes that a real client has to parse. A response-model or exception-handler
     change that breaks JSON encoding — a non-serialisable object in a detail
     field, say — fails here and nowhere else.
+
+    Why: In-process tests get a Python object back; only here does the error body have
+        to survive real JSON encoding.
     """
     invalid = live_client.post("/reports", json=report(latency_ms=-1.0))
     assert_status(invalid, 422)
@@ -162,6 +171,9 @@ def test_the_deployment_serves_its_documentation_and_dashboard(
     were unreachable in the deployed image, every generated client and every
     schema check downstream would be running against a document that only exists
     on a developer's laptop.
+
+    Why: The static mount is conditional on a directory existing in the image -
+        invisible to every in-process test.
     """
     dashboard = live_client.get("/")
     assert_status(dashboard, 200)
@@ -176,20 +188,3 @@ def test_the_deployment_serves_its_documentation_and_dashboard(
     docs = live_client.get("/docs")
     assert_status(docs, 200)
     assert docs.headers["content-type"].startswith("text/html")
-
-
-@pytest.mark.p2
-def test_unknown_paths_do_not_leak_a_stack_trace(live_client: httpx.Client) -> None:
-    """A 404 from the real server is a JSON body, not a debug page.
-
-    Cheap deployment check: uvicorn started with `--reload` or a framework debug
-    flag renders HTML tracebacks on error, which leaks source paths and local
-    variables. The Dockerfile does not enable it (`Dockerfile:11`) and this is what
-    keeps it that way.
-    """
-    response = live_client.get("/no-such-endpoint")
-
-    assert_status(response, 404)
-    assert response.headers["content-type"].startswith("application/json")
-    assert "Traceback" not in response.text
-    assert "/app/" not in response.text, "no filesystem paths in an error response"

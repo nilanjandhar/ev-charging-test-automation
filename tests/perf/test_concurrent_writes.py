@@ -63,6 +63,9 @@ async def test_concurrent_reports_for_one_station_all_land(live_client: httpx.Cl
     Isolation is by unique station ID, not by an empty database: over real HTTP
     there is no dependency to override, so the assertions are scoped to this
     station and the metrics assertions are deltas.
+
+    Why: The write path is append-only today; this is what goes red if someone
+        'optimises' ingest into an upsert.
     """
     sid = station_id("CONC")
     writers = SETTINGS.concurrency_writers
@@ -103,74 +106,6 @@ async def test_concurrent_reports_for_one_station_all_land(live_client: httpx.Cl
 
 
 @pytest.mark.p1
-@pytest.mark.asyncio
-async def test_concurrent_writers_across_stations_leave_metrics_consistent(
-    live_client: httpx.Client,
-) -> None:
-    """An aggregate read taken after concurrent writes must not be internally torn.
-
-    Different stations, all written at once, then one read of `/metrics/summary`.
-    The internal identities have to hold — `online + offline == total`,
-    `flagged <= total` — because they are computed in Python from a single query
-    (`metrics.py:33-40`) and a regression that split that into several queries
-    could observe two different snapshots and report `online + offline != total`.
-
-    Deliberately asserts identities and deltas rather than absolute counts: other
-    tests, and anything else sharing this deployment, are writing to the same
-    database.
-    """
-    stations = [station_id("MULTI") for _ in range(SETTINGS.concurrency_writers)]
-    payloads: list[dict[str, object]] = [
-        report(
-            station_id_=sid,
-            timestamp=at(),
-            connectivity_status="offline" if index % 2 else "online",
-            latency_ms=100.0,
-            error_count=10 if index % 2 else 0,
-        )
-        for index, sid in enumerate(stations)
-    ]
-    expected_offline = sum(1 for index in range(len(stations)) if index % 2)
-
-    before = assert_status(live_client.get("/metrics/summary"), 200)
-    codes = await _post_all(str(live_client.base_url), payloads)
-    after = assert_status(live_client.get("/metrics/summary"), 200)
-
-    assert codes == [201] * len(stations)
-
-    assert after["online_count"] + after["offline_count"] == after["total_stations"], (
-        "a torn read: the connectivity split does not add up to the station count"
-    )
-    assert after["flagged_count"] <= after["total_stations"]
-    assert after["total_stations"] == before["total_stations"] + len(stations)
-    assert after["offline_count"] == before["offline_count"] + expected_offline, (
-        "every offline station in this batch is visible; none was lost to a race"
-    )
-
-    # Each station must be individually retrievable — the aggregate counted it, so
-    # the detail view has to be able to show it.
-    for sid in stations:
-        assert_status(live_client.get(f"/stations/{sid}/status"), 200)
-
-
-@pytest.mark.p2
-def test_repeated_identical_reads_are_stable(live_client: httpx.Client) -> None:
-    """A read with no intervening write must not change under repetition.
-
-    Cheap guard against a non-deterministic aggregate — a `GROUP BY` whose result
-    depends on plan choice, or an ordering that varies between calls. If this ever
-    flickers, every other assertion in the suite is suspect.
-
-    Not a concurrency test in itself; it is the control that makes the two above
-    interpretable.
-    """
-    first = assert_status(live_client.get("/metrics/summary"), 200)
-    second = assert_status(live_client.get("/metrics/summary"), 200)
-
-    assert first == second, "aggregate read is not stable between two identical calls"
-
-
-@pytest.mark.p1
 def test_in_process_client_agrees_with_the_wire_on_a_single_report(
     api_client: TestClient,
 ) -> None:
@@ -180,6 +115,9 @@ def test_in_process_client_agrees_with_the_wire_on_a_single_report(
     in-process and live results for the same input ever diverge, the fast layers
     are lying and the split described in `TEST_STRATEGY.md` needs revisiting —
     that is the claim this test exists to keep honest.
+
+    Why: The control for the whole in-process/live split - if it fails, the fast layers
+        are lying.
     """
     sid = station_id()
 

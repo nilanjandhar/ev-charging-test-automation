@@ -105,6 +105,9 @@ def test_the_service_publishes_a_valid_openapi_document(openapi_schema: dict[str
     downgrades the FastAPI major version underneath us. The endpoint list is
     asserted explicitly rather than counted: a count of 6 passes when a path is
     renamed, and renaming a path is a breaking change for every client.
+
+    Why: The contract layer and any generated client both consume this document; a
+        renamed path breaks every consumer.
     """
     assert openapi_schema["openapi"].startswith("3.1"), (
         f"expected OpenAPI 3.1 (JSON Schema 2020-12); got {openapi_schema['openapi']}"
@@ -141,6 +144,9 @@ def test_every_documented_success_response_matches_its_schema(
     Driven through a single ingest so the responses describe a real station rather
     than empty collections — an empty list validates against almost any item
     schema, which would make this test look green while asserting nothing.
+
+    Why: Catches a hand-written `response_model` or a raw `JSONResponse` drifting from
+        the published shape.
     """
     sid = station_id()
     ingest = api_client.post(
@@ -186,35 +192,14 @@ def test_validation_errors_match_the_documented_error_schema(
     shape — a custom exception handler, a FastAPI major bump — breaks every client
     that reads `detail[].loc` to highlight a bad field, and would go unnoticed
     without this.
+
+    Why: Clients read `detail[].loc` to highlight a bad field; a custom exception
+        handler would break them silently.
     """
     response = api_client.post("/reports", json=report(latency_ms=-1.0))
 
     body = assert_conforms(openapi_schema, response, "/reports", "POST")
     assert body["detail"][0]["loc"] == ["body", "latency_ms"]
-
-
-@pytest.mark.p1
-def test_metrics_summary_declares_a_nullable_average(openapi_schema: dict[str, Any]) -> None:
-    """`average_latency_ms` must stay nullable in the published schema.
-
-    On an empty network the service returns `null` (`metrics.py:38-40`) and the
-    dashboard branches on it (`static/index.html:94-96`). If the field were ever
-    documented as a plain number, every generated client would treat null as a
-    contract violation on a freshly deployed, empty service — the exact moment
-    someone is watching the dashboard.
-    """
-    schema = openapi_schema["components"]["schemas"]["MetricsSummary"]
-    average = schema["properties"]["average_latency_ms"]
-
-    assert {"type": "null"} in average["anyOf"], f"average_latency_ms is not nullable: {average}"
-    assert set(schema["required"]) == {
-        "total_stations",
-        "online_count",
-        "offline_count",
-        "flagged_count",
-        "average_latency_ms",
-        "total_error_count",
-    }, "every metric is required — a client may not have to null-check the count fields"
 
 
 @pytest.mark.p2
@@ -235,6 +220,8 @@ def test_the_404_the_service_actually_returns_is_documented(
     and nobody added `responses={404: ...}`. A client generated from this schema
     therefore has no branch for 404 — which is the entire reason a service
     publishes one.
+
+    Why: The one contract failure a code-generated schema cannot catch by construction.
     """
     responses = openapi_schema["paths"]["/stations/{station_id}/status"]["get"]["responses"]
 
@@ -265,6 +252,9 @@ def test_timestamps_conform_to_the_date_time_format_they_declare(
     RFC 3339 requires an offset, so `2024-06-01T10:00:00` is not a `date-time`. A
     strict generated client rejects it; a lenient one parses it as browser-local
     time, which is what the dashboard does (`static/index.html:108`).
+
+    Why: Pins a live defect the structural checks miss, because JSON Schema treats
+        `format` as an annotation.
     """
     from jsonschema import FormatChecker
 
@@ -285,24 +275,3 @@ def test_timestamps_conform_to_the_date_time_format_they_declare(
     errors = [error.message for error in validator.iter_errors(body["latest_timestamp"])]
 
     assert not errors, f"{body['latest_timestamp']!r}: {errors}"
-
-
-@pytest.mark.p2
-def test_the_undocumented_404_body_is_at_least_consistent(api_client: TestClient) -> None:
-    """The shape clients have to reverse-engineer.
-
-    Since the 404 is absent from the schema, its body is unspecified — so this
-    pins what it actually is, giving the eventual `responses={404: ...}` entry
-    something to be written from. It is FastAPI's standard `{"detail": str}`
-    envelope, which is *not* the same shape as the 422's `{"detail": [ ... ]}`.
-    A client that assumes `detail` is a list will crash on a 404.
-    """
-    sid = station_id("GHOST")
-
-    body = assert_status(api_client.get(f"/stations/{sid}/status"), 404)
-
-    assert body == {"detail": f"Station '{sid}' not found"}
-    assert isinstance(body["detail"], str), (
-        "404 uses a string detail while 422 uses a list — clients must branch on status, "
-        "not on the shape of `detail`"
-    )

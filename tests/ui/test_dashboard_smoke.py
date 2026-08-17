@@ -51,6 +51,9 @@ def test_dashboard_renders_an_ingested_station(page: Page, live_client: httpx.Cl
     No `wait_for_timeout`: Playwright's assertions retry until their own deadline,
     so the page's asynchronous `loadData()` is handled by waiting on the *content*
     rather than on the clock.
+
+    Why: The dashboard reads six fields across three endpoints; an API change can stay
+        green and still blank the operator's screen.
     """
     from playwright.sync_api import expect
 

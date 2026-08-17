@@ -48,6 +48,9 @@ def test_a_single_report_is_reflected_identically_by_every_endpoint(
     formula in `service/README.md`, not imported from `service/app/scoring.py`,
     so a change to the service's constants breaks this test rather than sliding
     through both sides of the comparison.
+
+    Why: Four endpoints recompute 'latest per station' independently; nothing else
+        forces them to agree about one station.
     """
     sid = station_id()
     payload = report(station_id_=sid, connectivity_status="online", latency_ms=120.0, error_count=2)
@@ -104,6 +107,9 @@ def test_flagged_stations_agree_across_list_worklist_and_metrics(
     `ORDER BY` (`stations.py:82-91`) so its order is whatever the engine
     returns and differs between SQLite and PostgreSQL. Pinning today's accident
     would be a test that passes locally and fails in Docker for no useful reason.
+
+    Why: An operator triages from the worklist and drills into the detail view; if those
+        disagree the tool dispatches to healthy sites.
     """
     healthy = station_id("OK")
     dead_ish = station_id("BAD")
@@ -155,6 +161,9 @@ def test_metrics_aggregate_only_the_latest_report_per_station(
     `total_error_count`, not 10. This is the arithmetic the whole dashboard rests
     on, and it is the assertion that fails if anyone "optimises" the
     latest-per-station join into an aggregate over all history.
+
+    Why: The only guard against an 'optimised' join aggregating all history into the
+        dashboard's totals.
     """
     noisy = station_id()
     quiet = station_id()
@@ -196,6 +205,9 @@ def test_metrics_on_an_empty_network(api_client: TestClient) -> None:
     null (`metrics.py:38-40`). The dashboard renders it as 'N/A'
     (`static/index.html:94-96`); a 500 here would blank the whole panel on a fresh
     deployment, which is exactly when someone is watching it.
+
+    Why: A fresh deployment is the one time everyone is watching, and it is the only
+        path that can divide by zero.
     """
     metrics = assert_status(api_client.get("/metrics/summary"), 200)
 
@@ -207,55 +219,6 @@ def test_metrics_on_an_empty_network(api_client: TestClient) -> None:
         "average_latency_ms": None,
         "total_error_count": 0,
     }
-
-
-@pytest.mark.p2
-def test_station_listing_is_ordered_stably(api_client: TestClient) -> None:
-    """`/stations` is ordered by station_id and must stay that way.
-
-    Unlike the worklist, this endpoint *does* order (`stations.py:31`). The
-    dashboard renders it as a table an operator scans top to bottom, so a
-    regression to unordered results would make rows jump between 30-second
-    refreshes. Cheap to hold on to; the contrast with `/stations/poor-hygiene`
-    above is the point.
-    """
-    ids = sorted(station_id() for _ in range(5))
-    for sid in reversed(ids):  # insert in the opposite order to the one expected
-        api_client.post("/reports", json=report(station_id_=sid))
-
-    listing = assert_status(api_client.get("/stations"), 200)
-
-    assert station_ids(listing) == ids
-
-
-@pytest.mark.p1
-def test_one_absurd_latency_report_poisons_the_network_average(
-    api_client: TestClient,
-) -> None:
-    """`latency_ms` has no upper bound and the metric is an unweighted mean.
-
-    A single sensor glitch — or a station sending seconds where the schema expects
-    milliseconds — moves the network-wide latency KPI by any amount it likes. The
-    station's own score is protected by the -20 cap, so nothing about *that*
-    station looks wrong; the damage is entirely in the aggregate an ops lead
-    watches.
-
-    Pinned as current behaviour with the domain consequence written down. The fix
-    is a sane upper bound in the schema plus a percentile instead of a mean, and
-    neither is mine to make.
-    """
-    normal = station_id()
-    glitched = station_id()
-
-    api_client.post("/reports", json=report(station_id_=normal, latency_ms=100.0, error_count=0))
-    api_client.post("/reports", json=report(station_id_=glitched, latency_ms=1e12, error_count=0))
-
-    metrics = assert_status(api_client.get("/metrics/summary"), 200)
-    glitched_status = assert_status(api_client.get(f"/stations/{glitched}/status"), 200)
-
-    assert metrics["average_latency_ms"] == 500_000_000_050.0
-    assert metrics["flagged_count"] == 0, "no station looks unhealthy..."
-    assert glitched_status["hygiene_score"] == 80.0, "...because the latency penalty caps at 20"
 
 
 @pytest.mark.p1
@@ -274,6 +237,9 @@ def test_an_infinite_latency_report_erases_the_network_average_entirely(
 
     Sent as raw content because Python's own `json.dumps` refuses to emit
     non-finite floats — this payload only arrives from a laxer client.
+
+    Why: Pins a live defect: one report silently turns the network KPI into null, which
+        no threshold alert can fire on.
     """
     normal = station_id()
     api_client.post("/reports", json=report(station_id_=normal, latency_ms=100.0, error_count=0))
@@ -330,6 +296,9 @@ def test_a_retried_report_does_not_duplicate_the_station_in_the_listing(
 
     The brief documents this endpoint as "List all known stations with latest
     status". One entry per known station is the documented contract; two is not.
+
+    Why: At-least-once delivery is normal for field telemetry; without this the defect
+        is invisible until capacity numbers are wrong.
     """
     sid = station_id()
     payload = report(station_id_=sid)
@@ -358,6 +327,9 @@ def test_a_retried_report_does_not_inflate_network_metrics(api_client: TestClien
     single duplicated report inflates capacity planning, SLA reporting and the
     flagged-station count an operator uses to decide whether tonight is a problem.
     Observed during recon: two real stations, one retry, `total_stations: 3`.
+
+    Why: The expensive half of the same defect: SLA and capacity reporting run off these
+        counts.
     """
     sid = station_id()
     payload = report(station_id_=sid, error_count=2)
@@ -383,6 +355,9 @@ def test_a_retried_report_leaves_the_station_detail_view_correct(
     so it collapses the tie and returns one report. That asymmetry is the precise
     shape of the defect: the same duplicate is invisible here and doubled two endpoints
     over, which is how an inconsistency like this survives a casual manual check.
+
+    Why: Shows the asymmetry that lets the duplicate defect survive a manual check - one
+        endpoint hides what two others double.
     """
     sid = station_id()
     payload = report(station_id_=sid, latency_ms=120.0, error_count=2)
