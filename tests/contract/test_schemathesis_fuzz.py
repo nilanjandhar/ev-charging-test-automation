@@ -173,6 +173,7 @@ def _seed_one_station() -> None:
         )
 
 
+@pytest.mark.p1
 @schema.parametrize()
 @settings(max_examples=SETTINGS.schemathesis_max_examples, deadline=None)
 def test_operation_conforms_to_its_published_schema(case: Case) -> None:

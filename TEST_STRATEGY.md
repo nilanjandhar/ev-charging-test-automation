@@ -43,19 +43,62 @@ ranking was not what I expected:
 
 | Layer | Tests | Why this much |
 |---|---|---|
-| Unit boundaries | 26 | R2 and R7 are the top two risks and both are pure-function bugs. Cheapest place to catch the most damage. |
+| Unit boundaries | 26 | R2 and R7 are the top two risks and both are pure-function bugs — the cheapest place to catch the most damage. |
 | Property-based | 15 | The scoring function is pure with real invariants. Found R15. |
-| API integration | 43 | The heaviest layer: R1, R3, R5, R6, R11, R18 are all cross-endpoint or ordering defects no unit test can see. |
+| API integration | 43 | Heaviest layer: R1, R3, R5, R6, R11 and R18 are all cross-endpoint or ordering defects no unit test can see. |
 | Contract | 13 | The service publishes its own schema, so conformance is nearly free. Found R9 and R16. |
-| E2E | 5 | Deliberately thin — only what in-process testing physically cannot cover. |
+| E2E | 5 | Deliberately thin — only what in-process testing cannot cover. |
 | Perf + concurrency | 6 | Reports, never gates. |
 | UI | 1 | One smoke test. |
 
-**Why not a pyramid.** A pyramid says write mostly unit tests because they are
-cheap. But this service's logic is 40 lines of arithmetic, while its risk lives in
-three SQL queries that each reinvent "the latest report per station". Weighting by
-the register puts the mass where the bugs are — which is why integration is the
-biggest layer here, and why I would not defend that split for a different service.
+**Why not a pyramid.** This service's logic is 40 lines of arithmetic, while its
+risk lives in three SQL queries that each reinvent "the latest report per station".
+Weighting by the register rather than by shape puts the mass where the bugs are —
+which is why integration is the biggest layer, and why I would not defend that
+split for a different service.
+
+## Priority tiers: P0 / P1 / P2
+
+Layer answers *where* a test runs. Tier answers the question that matters during a
+bad build: **which red test do I read first?** Every test declares exactly one,
+derived from the blast radius of the risk it covers. Per-test rationale is in
+[`notes/risk-register.md`](notes/risk-register.md#priority-tiers).
+
+| Tier | Means | Tests | If it is red |
+|---|---|---|---|
+| **P0** | The service is doing its core job wrong: the score, the flag decision, which report counts as latest, or the endpoints disagreeing about one station. | 42 (39%) | Stop. Do not ship, and do not investigate anything else first. |
+| **P1** | A real defect, narrower blast radius or a specific edge: validation contract, schema conformance, metric robustness, timezone semantics, saturation and rounding edges, concurrency invariants. | 53 (49%) | Fix before release; it does not block the next person's merge. |
+| **P2** | Worth having, not worth blocking on: response ordering, deployment surface, framework-default pinning, perf, the UI smoke. | 14 (13%) | File it. Information, not an emergency. |
+
+**Tier is derived from the register but is not a re-ranking of it**, and the
+disagreements are the interesting part. R16 is rank 3 in the register yet its tests
+are P1, because the damage is client-side deserialisation rather than a wrong
+dispatch — an operator with a mangled timestamp still gets the right station on the
+right worklist. Conversely, the test that a client cannot post its own
+`hygiene_score` covers no numbered risk and is P0, because that would defeat the
+entire point of the service.
+
+**Enforced, not aspirational.** `tests/conftest.py` refuses to collect a test that
+declares no tier, or two. A silent default would have been easier and worse: the
+tests that most need triage are the ones written in a hurry, so they are exactly
+the ones that would have inherited it. Tiers are per-test rather than a module-level
+`pytestmark` because pytest cannot remove an inherited marker from one item — with a
+module default, `-m p0` would also match the P1 tests in a P0 module. That same hook
+stamps the tier into the JUnit XML, so the HTML report reads it instead of
+re-deriving it and can never disagree with the run about what is P0.
+
+```bash
+make test-p0    # or `make smoke` — 37 tests, ~1s
+pytest -m "p0 and api"          # tiers compose with layers
+```
+
+**I did not split the CI pipeline by tier.** It is the obvious next move and it
+would be waste here: the gate is 109 tests in ~1.5 s, so a P0-first job would spend
+~40 s of runner setup to save one and a half, and `needs:` already keeps the
+container jobs from starting behind a broken gate. The tiers pay off instead in
+triage order, a seconds-long local `make smoke`, and a P0 banner in the report. If
+the gate ever ran in minutes, the split would be P0+P1 blocking on PRs with P2
+moved post-merge — the markers are already there for that day.
 
 ## Tools, and the alternative each one beat
 
@@ -65,8 +108,8 @@ biggest layer here, and why I would not defend that split for a different servic
   and live clients share one interface.
 - **Hypothesis** because `compute_hygiene_score` is a pure function over a small
   domain — the one place here where property-based testing is the right tool rather
-  than an impressive-sounding one. It falsified two invariants I wrote by hand (R15).
-  I deliberately did **not** point it at the HTTP layer: that needs a
+  than an impressive-sounding one. It falsified two invariants I wrote by hand
+  (R15). I deliberately did **not** point it at the HTTP layer: that needs a
   function-scoped DB fixture shared across examples, the classic anti-pattern.
 - **jsonschema** over an OpenAPI-specific validator — OpenAPI 3.1 *is* JSON Schema
   2020-12, so no translation layer. One trade-off: `format` is an annotation, so
@@ -77,11 +120,11 @@ biggest layer here, and why I would not defend that split for a different servic
   defaults on one schema is not redundancy — it is where the findings were.
 - **pytest-randomly** — order-dependence fails loudly instead of hiding. It exposed
   cross-test pollution from schemathesis' ASGI transport leaking anyio streams.
-- **Playwright** for the one UI test: role/text selectors, auto-retrying assertions,
-  so no `wait_for_timeout`. One cost I hit — a failed browser launch leaves its event
-  loop in a state that kills unrelated asyncio and `TestClient` tests in the same
-  process, so `make test-all` runs the UI layer in its own process, as CI does.
-- **ruff + `mypy --strict`** over the tests. Tests are production code.
+- **Playwright** for the one UI test: role/text selectors and auto-retrying
+  assertions, so no `wait_for_timeout`. One cost I hit — a failed browser launch
+  leaves its event loop in a state that kills unrelated asyncio and `TestClient`
+  tests in the same process, so `make test-all` runs the UI layer separately.
+- **ruff + `mypy --strict`** over tests *and* tools. Tests are production code.
 
 ## Test data and isolation — the decision I care most about
 
@@ -97,7 +140,7 @@ No reset endpoint, real persistent state, so isolation is entirely on me:
 Choosing the cheap option would have cost real findings: **R1, R5 and R18 are only
 visible in network-wide aggregates.** So the suite runs **dependency overrides
 in-process and ID namespacing over the wire**, where every e2e assertion is a delta
-(`after == before + 1`) because it shares a database with whatever else is deployed.
+(`after == before + 1`) because that database is shared.
 
 **Builders, not fixtures-per-scenario** — one `report()` builder defaulting to the
 README's sample payload, so the interesting field is visible at the call site.
@@ -155,35 +198,33 @@ Full output: [`notes/mutation-check.md`](notes/mutation-check.md).
 
 **16 mutants, 15 killed, 1 survivor — and the survivor is the point:** the last is
 a deliberate no-op, so if the harness reported it killed, every result above it
-would be worthless. Two uncomfortable results:
-
-- `recency-inverted` (`ORDER BY timestamp DESC` → `ASC`) is killed by **only three
-  tests, all in one file** — a narrow net under the worst realistic bug here.
-- `metrics-errors-over-all-history` is killed by **exactly one test**. Delete it and
-  superseded reports could leak into the network error total unnoticed.
-
-Both are real gaps, not rhetorical modesty; they are items 1 and 2 below. I ran
-this by hand rather than adding `mutmut`, because at this size the value is in
-choosing mutations a person would actually make.
+would be worthless. Two uncomfortable results: `recency-inverted`
+(`ORDER BY timestamp DESC` → `ASC`) is killed by **only three tests, all in one
+file** — a narrow net under the worst realistic bug here — and
+`metrics-errors-over-all-history` by **exactly one**. Both are real gaps, not
+rhetorical modesty; they are items 1 and 2 below. I ran this by hand rather than
+adding `mutmut`, because at this size the value is in choosing mutations a person
+would actually make.
 
 ## Known service issues
 
 Each has a test. The `xfail(strict=True)` ones assert the behaviour I believe is
 *correct*, so fixing the service turns the XPASS into a build failure and forces
-this list to be updated — the only way a known-bug marker stays honest.
+this list to be updated — the only way a known-bug marker stays honest. Full
+write-ups, blast radius and reproductions: [`notes/risk-register.md`](notes/risk-register.md).
 
 | ID | Issue | Pinned in |
 |---|---|---|
-| **R2** | Offline + 0 latency + 0 errors → exactly 60.0, **not** flagged. Code and README agree, so this is a *specification* defect; I pinned current behaviour rather than xfailing it, because I am not entitled to invent a threshold. Highest-severity finding here. | `unit/test_scoring_boundaries.py` |
-| **R1** | A duplicate `(station_id, timestamp)` — any at-least-once retry — lists the station twice and inflates every metric. `/stations/{id}/status` is unaffected, which is how it survives a manual check. | 2 × `xfail(strict)`, `api/test_cross_endpoint_consistency.py` |
-| **R3** | A future-dated report permanently masks every later report; frozen at "online, 100" the station is permanently green. Pinned, not xfailed: the fix is a product decision (reject? clamp? rank by the already-stored `created_at`?). | `api/test_recency_semantics.py` |
+| **R2** | Offline + 0 latency + 0 errors → exactly 60.0, **not** flagged. Code and README agree, so this is a *specification* defect: pinned as-is rather than inventing a threshold. Highest-severity finding here. | `unit/test_scoring_boundaries.py` |
+| **R1** | Any at-least-once retry lists the station twice and inflates every metric. `/stations/{id}/status` is unaffected, which is how it survives a manual check. | 2 × `xfail(strict)`, `api/` |
+| **R3** | A future-dated report permanently masks every later one, leaving the station green forever. Pinned, not xfailed — the fix is a product decision (reject? clamp? rank by the already-stored `created_at`?). | `api/test_recency_semantics.py` |
 | **R16** | `latest_timestamp` declares `format: date-time` but the service emits naive datetimes — it violates its own schema. Found by schemathesis. | `xfail(strict)`, `contract/` |
-| **R17** | `error_count: 2**63` passes validation and overflows the driver → unhandled **500** on an unauthenticated endpoint (`2**63 - 1` is fine). Fix is a `le=` bound so the 422 happens at the edge. Found by schemathesis. | `xfail(strict)` + a boundary test, `api/test_ingest_validation.py` |
-| **R18** | `latency_ms: 1e999` → `Infinity` is accepted, and `average_latency_ms` then serialises as `null` — indistinguishable from a healthy empty network, and no threshold alert fires on null. | `api/test_cross_endpoint_consistency.py` |
-| **R15** | The score is rounded *last*, so the offline penalty is 40 ± 0.01 and any penalty under 0.005 vanishes — making R2's blind spot an interval (every offline station under 0.1 ms), not a point. Found by Hypothesis. | `unit/test_scoring_properties.py` |
-| **R9** | `/stations/{id}/status` returns a 404 its schema does not declare, and its `detail` is a *string* where the 422's is a *list*. | `xfail(strict)`, `contract/` |
-| **R8** | `/health` returns ok without touching the database — a liveness probe used as a readiness probe, so a rollout proceeds into a deploy that 500s on every read. Documented rather than asserted: the behaviour is correct *for a liveness probe*; the defect is that nothing else exists. | docstring, `e2e/test_live_service.py` |
-| **R10** | `/stations/poor-hygiene` has no `ORDER BY`, so the worklist reshuffles and differs between SQLite and PostgreSQL. Asserted as a set, never as a list. | `api/test_cross_endpoint_consistency.py` |
+| **R17** | `error_count: 2**63` passes validation and overflows the driver → unhandled **500** (`2**63 - 1` is fine). Fix is a `le=` bound. Found by schemathesis. | `xfail(strict)` + boundary test, `api/` |
+| **R18** | `Infinity` latency is accepted and `average_latency_ms` then serialises as `null` — indistinguishable from an empty network, and no alert fires on null. | `api/test_cross_endpoint_consistency.py` |
+| **R15** | The score is rounded *last*, so R2's blind spot is an interval (every offline station under 0.1 ms), not a point. Found by Hypothesis. | `unit/test_scoring_properties.py` |
+| **R9** | A 404 the schema does not declare, whose `detail` is a *string* where the 422's is a *list*. | `xfail(strict)`, `contract/` |
+| **R8** | `/health` never touches the database: a liveness probe used as a readiness probe, so a rollout proceeds into a deploy that 500s on every read. Documented rather than asserted — the defect is that nothing else exists. | docstring, `e2e/` |
+| **R10** | `/stations/poor-hygiene` has no `ORDER BY`, so the worklist reshuffles between engines. Asserted as a set, never a list. | `api/` |
 
 Two behaviours I judged **not** defects but pinned anyway, because nobody chose
 them: extra JSON fields are silently ignored (notably a client *cannot* inject its
@@ -192,22 +233,22 @@ real clients depend on; the risk is a major-version upgrade changing them quietl
 
 ## What I deliberately did not do
 
-1. **Data-volume / query-degradation testing (R13).** Every read scans the whole
-   table with a `GROUP BY`, no retention, no index on `timestamp` — ~260M rows a
-   year at 500 stations reporting each minute. Automating it means seeding tens of
-   millions of rows, which against SQLite on a shared runner measures the runner's
-   disk. Belongs in a staging soak. Instead: the arithmetic is on the record, plus
-   an affordable slice in the perf layer (already super-linear at 200 rows? No).
-2. **Payload-size / resource-exhaustion testing (R12).** No body limit anywhere, so
-   a 100 MB test could only pin "unbounded" as correct or fail forever. Limits
-   belong at the ingress — and if hostile callers are in the threat model, the
-   missing control is *authentication*, which this service has none of. Instead: a
-   10 KB firmware string round-trips intact, and the gap is documented.
+1. **Data-volume / query-degradation testing (R13).** ~260M rows a year at 500
+   stations reporting each minute, and every read scans the whole table. Automating
+   it means seeding tens of millions of rows, which against SQLite on a shared
+   runner measures the runner's disk. Belongs in a staging soak. Instead: the
+   arithmetic is on the record, plus an affordable slice in the perf layer
+   (already super-linear at 200 rows? No).
+2. **Payload-size / resource-exhaustion testing (R12).** With no body limit
+   anywhere, a 100 MB test could only pin "unbounded" as correct or fail forever.
+   Limits belong at the ingress — and if hostile callers are in the threat model,
+   the missing control is *authentication*, which this service has none of.
+   Instead: a 10 KB firmware string round-trips intact, and the gap is documented.
 3. **Deep UI automation.** One static HTML file, no build, no framework, no router.
    Page objects and a browser matrix would cost more than the rest of the suite, to
    catch a JS typo. One smoke test, nightly.
 4. **A real load harness (k6/Locust).** Against one uvicorn worker behind a 40 ms
-   artificial delay it would measure the delay and the runner.
+   artificial delay, it measures the delay and the runner.
 5. **Mocking the scoring function in API tests.** R7 *is* that the real constants
    change; a mocked test passes against every mutation of the thing it protects. The
    API layer computes expected values from a second implementation of the published
@@ -223,19 +264,17 @@ real clients depend on; the risk is a major-version upgrade changing them quietl
    service and a silently wrong network error total is one too few.
 3. **Run the API layer against PostgreSQL, not only via e2e.** The `GROUP BY`
    semantics behind R1 differ between engines and the fast layers only ever see
-   SQLite. A `testcontainers` fixture behind a marker would likely surface more of
-   R11.
+   SQLite; a `testcontainers` fixture behind a marker would likely surface more of R11.
 4. **A stateful Hypothesis model of the ingest/read cycle.** The invariants are
    already written prose in the register: distinct IDs equals `total_stations`, the
    worklist equals the flagged subset, status always reflects `MAX(timestamp)`. A
    `RuleBasedStateMachine` would search *sequences* rather than the cases I thought
    of. Highest-value addition; I ran out of time.
 5. **Consumer-driven contract tests.** Today's contract layer validates against the
-   schema the service publishes about itself, so it cannot catch "schema and
-   service are both wrong". A Pact-style contract owned by the dashboard would.
-6. **Close R8.** A readiness probe that touches the database is a service change,
-   so I only documented it — but it is the first ticket I would file, because it is
-   the one defect that makes a bad deploy invisible to the platform.
+   service's own schema, so it cannot catch "schema and service are both wrong".
+6. **Close R8.** A readiness probe that touches the database is a service change, so
+   I only documented it — but it is the first ticket I would file: it is the one
+   defect that makes a bad deploy invisible to the platform.
 
 ## Caveats on my own numbers
 

@@ -24,6 +24,7 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
 pytestmark = pytest.mark.api
 
 
+@pytest.mark.p0
 def test_status_reflects_the_newest_timestamp_not_the_newest_arrival(
     api_client: TestClient,
 ) -> None:
@@ -76,6 +77,7 @@ def test_status_reflects_the_newest_timestamp_not_the_newest_arrival(
     )
 
 
+@pytest.mark.p0
 def test_a_future_dated_report_permanently_masks_every_later_report(
     api_client: TestClient,
 ) -> None:
@@ -142,6 +144,7 @@ def test_a_future_dated_report_permanently_masks_every_later_report(
     assert metrics["flagged_count"] == 0
 
 
+@pytest.mark.p1
 def test_utc_offsets_are_dropped_rather_than_normalised(api_client: TestClient) -> None:
     """R6: two reports of the same instant are not treated as the same instant.
 
@@ -189,6 +192,7 @@ def test_utc_offsets_are_dropped_rather_than_normalised(api_client: TestClient) 
     )
 
 
+@pytest.mark.p1
 def test_timestamps_lose_their_timezone_on_the_round_trip(api_client: TestClient) -> None:
     """R6: what goes in as UTC comes back with no zone at all.
 
@@ -216,6 +220,7 @@ def test_timestamps_lose_their_timezone_on_the_round_trip(api_client: TestClient
     )
 
 
+@pytest.mark.p1
 def test_reports_that_tie_on_timestamp_do_not_crash_the_detail_view(
     api_client: TestClient,
 ) -> None:

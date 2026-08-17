@@ -41,6 +41,61 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Priority tiers
+# ---------------------------------------------------------------------------
+#: P0 / P1 / P2, defined in TEST_STRATEGY.md and derived from the risk register.
+#: The tier answers a triage question — "which red test do I read first?" — so it
+#: follows the blast radius of the risk a test covers, not the layer it lives in.
+PRIORITY_TIERS = ("p0", "p1", "p2")
+
+
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
+    """Enforce exactly one priority tier per test, and record it for the report.
+
+    Two jobs, both deliberate:
+
+    * **Every test must declare a tier.** A test nobody triaged is a test whose
+      failure nobody knows how to rank, so collection *fails* rather than
+      defaulting to P2 — a silent default would quietly fill up with the tests
+      that matter most, since those are the ones written in a hurry.
+    * **Only one tier, applied per test rather than per module.** A module-level
+      `pytestmark` tier would be inherited by every test in the file, and pytest
+      cannot remove an inherited marker from a single item — so `-m p0` would also
+      match a P1 test in a P0 module. Marking each test keeps `-m p0` exact, and
+      keeps the tier visible at the point where someone reads the test.
+
+    The resolved tier is stamped into `user_properties`, which lands in the JUnit
+    XML (`junit_family = xunit1`) and is what `tools/test_report.py` reads. One
+    resolution point, so the report can never disagree with the run.
+    """
+    untiered: list[str] = []
+    overloaded: list[str] = []
+
+    for item in items:
+        tiers = [marker.name for marker in item.iter_markers() if marker.name in PRIORITY_TIERS]
+        if not tiers:
+            untiered.append(item.nodeid)
+            continue
+        if len(set(tiers)) > 1:
+            overloaded.append(f"{item.nodeid} -> {sorted(set(tiers))}")
+            continue
+        item.user_properties.append(("priority", tiers[0]))
+
+    problems: list[str] = []
+    if untiered:
+        problems.append(
+            "these tests declare no priority tier — add @pytest.mark.p0/p1/p2 "
+            "(see TEST_STRATEGY.md 'Priority tiers'):\n  " + "\n  ".join(untiered)
+        )
+    if overloaded:
+        problems.append(
+            "these tests declare more than one priority tier:\n  " + "\n  ".join(overloaded)
+        )
+    if problems:
+        raise pytest.UsageError("\n\n".join(problems))
+
+
+# ---------------------------------------------------------------------------
 # Hypothesis profiles
 # ---------------------------------------------------------------------------
 # "ci" is derandomised and bounded so a PR gate is reproducible and fast: the same

@@ -34,6 +34,7 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
 pytestmark = [pytest.mark.ui, pytest.mark.slow]
 
 
+@pytest.mark.p2
 def test_dashboard_renders_an_ingested_station(page: Page, live_client: httpx.Client) -> None:
     """R14: a station ingested via the API appears on the dashboard with its real status.
 

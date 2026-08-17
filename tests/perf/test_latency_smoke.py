@@ -94,6 +94,7 @@ def _measure(
     )
 
 
+@pytest.mark.p2
 def test_read_and_write_latency_against_a_configured_budget(
     live_client: httpx.Client, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -145,6 +146,7 @@ def test_read_and_write_latency_against_a_configured_budget(
     assert not breaches, "p95 budget exceeded:\n" + "\n".join(m.render() for m in breaches)
 
 
+@pytest.mark.p2
 def test_metrics_latency_does_not_degrade_with_report_volume(
     live_client: httpx.Client, capsys: pytest.CaptureFixture[str]
 ) -> None:

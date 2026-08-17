@@ -33,6 +33,7 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
 pytestmark = pytest.mark.api
 
 
+@pytest.mark.p1
 @pytest.mark.parametrize(
     ("overrides", "field", "error_type"),
     [
@@ -83,6 +84,7 @@ def test_invalid_field_is_rejected_with_a_machine_readable_error(
     assert_validation_error(response, field=field, error_type=error_type)
 
 
+@pytest.mark.p1
 @pytest.mark.parametrize(
     "missing",
     [
@@ -109,6 +111,7 @@ def test_every_field_is_required(api_client: TestClient, missing: str) -> None:
     assert_validation_error(response, field=missing, error_type="missing")
 
 
+@pytest.mark.p0
 def test_unknown_fields_are_ignored_and_cannot_override_the_computed_score(
     api_client: TestClient,
 ) -> None:
@@ -148,6 +151,7 @@ def test_unknown_fields_are_ignored_and_cannot_override_the_computed_score(
     assert "rogue_field" not in status, "unknown fields are dropped, not persisted or echoed"
 
 
+@pytest.mark.p2
 def test_numeric_strings_are_coerced_rather_than_rejected(api_client: TestClient) -> None:
     """Pydantic's lax mode accepts `"120"` for a float. The brief implies it would not.
 
@@ -175,6 +179,7 @@ def test_numeric_strings_are_coerced_rather_than_rejected(api_client: TestClient
     assert status["error_count"] == 2
 
 
+@pytest.mark.p1
 @pytest.mark.parametrize(
     ("body", "content_type"),
     [
@@ -200,6 +205,7 @@ def test_malformed_bodies_are_422_not_500(
     assert isinstance(response.json()["detail"], list)
 
 
+@pytest.mark.p1
 def test_unknown_station_is_a_clean_404(api_client: TestClient) -> None:
     """A station nobody has reported for must 404 with a usable message, not an empty 200.
 
@@ -213,6 +219,7 @@ def test_unknown_station_is_a_clean_404(api_client: TestClient) -> None:
     assert_station_absent(api_client.get(f"/stations/{sid}/status"), sid)
 
 
+@pytest.mark.p2
 def test_station_ids_are_matched_exactly(api_client: TestClient) -> None:
     """Lookup is exact-match: no trimming, no case folding, no prefix matching.
 
@@ -229,6 +236,7 @@ def test_station_ids_are_matched_exactly(api_client: TestClient) -> None:
     assert_station_absent(api_client.get(f"/stations/{sid} /status"), f"{sid} ")
 
 
+@pytest.mark.p2
 def test_a_large_but_plausible_payload_is_accepted(api_client: TestClient) -> None:
     """R12: neither `station_id` nor `firmware_version` has an upper length bound.
 
@@ -257,6 +265,7 @@ def test_a_large_but_plausible_payload_is_accepted(api_client: TestClient) -> No
     assert status["firmware_version"] == long_firmware, "stored verbatim, no truncation"
 
 
+@pytest.mark.p1
 @pytest.mark.xfail(
     strict=True,
     reason=(
@@ -290,6 +299,7 @@ def test_an_enormous_error_count_is_rejected_rather_than_crashing_ingest(
     assert_validation_error(response, field="error_count")
 
 
+@pytest.mark.p1
 def test_the_int64_boundary_below_the_crash_is_accepted(api_client: TestClient) -> None:
     """R17, the other side of the boundary — so the xfail above cannot drift.
 
@@ -311,6 +321,7 @@ def test_the_int64_boundary_below_the_crash_is_accepted(api_client: TestClient) 
     assert body["flagged"] is False
 
 
+@pytest.mark.p2
 def test_wrong_method_and_missing_route_are_not_500s(api_client: TestClient) -> None:
     """The edges of the routing table: 405 and 404, with JSON bodies.
 

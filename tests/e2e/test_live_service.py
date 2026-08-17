@@ -36,6 +36,7 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
 pytestmark = pytest.mark.e2e
 
 
+@pytest.mark.p0
 def test_health_endpoint_answers_over_real_http(live_client: httpx.Client) -> None:
     """The readiness signal CI polls has to be exactly what CI expects.
 
@@ -57,6 +58,7 @@ def test_health_endpoint_answers_over_real_http(live_client: httpx.Client) -> No
     assert response.headers["content-type"].startswith("application/json")
 
 
+@pytest.mark.p0
 def test_a_station_journey_over_the_wire(live_client: httpx.Client) -> None:
     """R11: the whole operator journey against the real deployment, in deltas.
 
@@ -125,6 +127,7 @@ def test_a_station_journey_over_the_wire(live_client: httpx.Client) -> None:
     assert after["offline_count"] == before["offline_count"] + 1
 
 
+@pytest.mark.p1
 def test_error_responses_serialise_correctly_over_http(live_client: httpx.Client) -> None:
     """R11: 422 and 404 survive real serialisation, with real content types.
 
@@ -143,6 +146,7 @@ def test_error_responses_serialise_correctly_over_http(live_client: httpx.Client
     assert missing.headers["content-type"].startswith("application/json")
 
 
+@pytest.mark.p2
 def test_the_deployment_serves_its_documentation_and_dashboard(
     live_client: httpx.Client,
 ) -> None:
@@ -174,6 +178,7 @@ def test_the_deployment_serves_its_documentation_and_dashboard(
     assert docs.headers["content-type"].startswith("text/html")
 
 
+@pytest.mark.p2
 def test_unknown_paths_do_not_leak_a_stack_trace(live_client: httpx.Client) -> None:
     """R20: a 404 from the real server is a JSON body, not a debug page.
 

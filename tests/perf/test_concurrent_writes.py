@@ -45,6 +45,7 @@ async def _post_all(base_url: str, payloads: list[dict[str, object]]) -> list[in
     return [response.status_code for response in responses]
 
 
+@pytest.mark.p0
 @pytest.mark.asyncio
 async def test_concurrent_reports_for_one_station_all_land(live_client: httpx.Client) -> None:
     """R11: N simultaneous writers, N stored reports, and the final state is one of them.
@@ -100,6 +101,7 @@ async def test_concurrent_reports_for_one_station_all_land(live_client: httpx.Cl
     assert after["online_count"] == before["online_count"] + 1
 
 
+@pytest.mark.p1
 @pytest.mark.asyncio
 async def test_concurrent_writers_across_stations_leave_metrics_consistent(
     live_client: httpx.Client,
@@ -150,6 +152,7 @@ async def test_concurrent_writers_across_stations_leave_metrics_consistent(
         assert_status(live_client.get(f"/stations/{sid}/status"), 200)
 
 
+@pytest.mark.p2
 def test_repeated_identical_reads_are_stable(live_client: httpx.Client) -> None:
     """R11: a read with no intervening write must not change under repetition.
 
@@ -166,6 +169,7 @@ def test_repeated_identical_reads_are_stable(live_client: httpx.Client) -> None:
     assert first == second, "aggregate read is not stable between two identical calls"
 
 
+@pytest.mark.p1
 def test_in_process_client_agrees_with_the_wire_on_a_single_report(
     api_client: TestClient,
 ) -> None:

@@ -49,6 +49,18 @@ LAYER_BLURB = {
 
 Outcome = str  # "passed" | "failed" | "error" | "known" | "skipped"
 
+#: Priority tiers, highest first. Definitions mirror TEST_STRATEGY.md; the tier is
+#: read from the JUnit XML rather than re-derived from source, so this report and
+#: the run can never disagree about which tests are P0.
+TIER_ORDER = ["p0", "p1", "p2", "untiered"]
+TIER_LABEL = {"p0": "P0", "p1": "P1", "p2": "P2", "untiered": "Untiered"}
+TIER_BLURB = {
+    "p0": "The service is doing its core job wrong. Read these failures first.",
+    "p1": "A real defect with a narrower blast radius, or a specific edge.",
+    "p2": "Worth having, not worth blocking on.",
+    "untiered": "No priority declared — tests/conftest.py normally rejects these.",
+}
+
 
 @dataclass
 class Case:
@@ -60,6 +72,8 @@ class Case:
     message: str = ""
     detail: str = ""
     risks: list[str] = field(default_factory=list)
+    #: "p0" | "p1" | "p2", stamped into the JUnit XML by tests/conftest.py.
+    tier: str = "untiered"
 
     @property
     def node_id(self) -> str:
@@ -144,6 +158,11 @@ def parse_junit(paths: list[Path]) -> tuple[list[Case], dict[str, str]]:
                     outcome = "known" if is_xfail else "skipped"
                     message, detail = skipped.get("message") or "", skipped.text or ""
 
+                tier = "untiered"
+                for prop in element.iter("property"):
+                    if prop.get("name") == "priority":
+                        tier = prop.get("value") or tier
+
                 risks = RISK_PATTERN.findall(message)
                 risks += [r for r in docstring_risks.get((module, base_name), []) if r not in risks]
 
@@ -157,6 +176,7 @@ def parse_junit(paths: list[Path]) -> tuple[list[Case], dict[str, str]]:
                         message=message.strip(),
                         detail=detail.strip(),
                         risks=risks,
+                        tier=tier,
                     )
                 )
 
@@ -366,6 +386,9 @@ h1 {
 .tile.is-known  { --edge: var(--known); }
 .tile.is-skipped{ --edge: var(--skip); }
 .tile.is-total  { --edge: var(--accent); }
+.tile.is-p0 { --edge: var(--fail); }
+.tile.is-p1 { --edge: var(--line); }
+.tile.is-p2 { --edge: var(--line-soft); }
 .tile dt {
   font: 600 var(--step--1)/1 var(--mono);
   letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted);
@@ -441,6 +464,41 @@ h2 .count {
   white-space: nowrap;
 }
 .chip.risk { color: var(--accent); background: var(--accent-soft); border-color: var(--accent); }
+/* Tier is the primary label on a row, so it carries weight the risk chip does not.
+   P0 borrows the critical hue because a P0 failure IS the severe case; P1 and P2
+   step down through the neutral scale rather than inventing two more colours. */
+.chip.tier { font-weight: 700; }
+.chip.tier-p0 { color: var(--surface); background: var(--fail); border-color: var(--fail); }
+.chip.tier-p1 { color: var(--ink-soft); background: var(--surface-sunk); border-color: var(--line); }
+.chip.tier-p2 { color: var(--muted); background: transparent; border-color: var(--line-soft); }
+.chip.tier-untiered { color: var(--known); background: var(--known-soft); border-color: var(--known); }
+
+/* The one thing a reader must not have to hunt for. */
+.p0-alert {
+  margin: 0;
+  padding: 0.85rem 1rem;
+  background: var(--fail-soft);
+  border: 1px solid var(--fail);
+  border-left-width: 4px;
+  border-radius: 3px;
+  color: var(--ink);
+}
+.p0-alert p { margin: 0; }
+.p0-alert strong { color: var(--fail); }
+.p0-alert ul { margin: 0.5rem 0 0; padding-left: 1.1rem; font-family: var(--mono); font-size: var(--step--1); }
+.p0-alert li { margin-top: 0.2rem; }
+.p0-clear {
+  margin: 0;
+  padding: 0.6rem 0.9rem;
+  background: var(--pass-soft);
+  border-left: 3px solid var(--pass);
+  border-radius: 2px;
+  font-size: var(--step--1);
+  color: var(--ink-soft);
+}
+.p0-clear strong { color: var(--pass); font-family: var(--mono); letter-spacing: 0.06em; }
+
+td .tiername { font-weight: 700; font-family: var(--mono); }
 .chip.state-failed, .chip.state-error { color: var(--fail); background: var(--fail-soft); border-color: var(--fail); }
 .chip.state-known { color: var(--known); background: var(--known-soft); border-color: var(--known); }
 .chip.state-passed { color: var(--pass); background: var(--pass-soft); border-color: var(--pass); }
@@ -518,6 +576,7 @@ td .bar { height: 0.4rem; min-width: 6rem; }
 }
 .filter[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
 .filter:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.filter-sep { width: 1px; align-self: stretch; background: var(--line); margin: 0 0.25rem; }
 .empty { margin: 0; color: var(--muted); font-family: var(--mono); font-size: var(--step--1); }
 .group > summary {
   cursor: pointer; list-style: none;
@@ -550,16 +609,26 @@ footer a { color: var(--accent); }
 JS = """
 const search = document.getElementById('q');
 const filters = Array.from(document.querySelectorAll('.filter'));
+const stateFilters = filters.filter(f => f.dataset.state);
+const tierFilters = filters.filter(f => f.dataset.tier);
 const rows = Array.from(document.querySelectorAll('#all .row'));
+
+function pressed(group, key) {
+  return new Set(group.filter(f => f.getAttribute('aria-pressed') === 'true')
+                      .map(f => f.dataset[key]));
+}
 
 function apply() {
   const needle = (search.value || '').toLowerCase().trim();
-  const active = new Set(filters.filter(f => f.getAttribute('aria-pressed') === 'true')
-                                .map(f => f.dataset.state));
+  // Status and tier are independent axes, ANDed together: "P0" plus "Failed"
+  // answers the only question that matters during a bad build.
+  const states = pressed(stateFilters, 'state');
+  const tiers = pressed(tierFilters, 'tier');
   rows.forEach(row => {
     const matchesText = !needle || row.dataset.search.includes(needle);
-    const matchesState = active.size === 0 || active.has(row.dataset.state);
-    row.hidden = !(matchesText && matchesState);
+    const matchesState = states.size === 0 || states.has(row.dataset.state);
+    const matchesTier = tiers.size === 0 || tiers.has(row.dataset.tier);
+    row.hidden = !(matchesText && matchesState && matchesTier);
   });
   document.querySelectorAll('#all .group').forEach(group => {
     const visible = Array.from(group.querySelectorAll('.row')).filter(r => !r.hidden).length;
@@ -584,7 +653,10 @@ def esc(text: str) -> str:
 
 
 def render_row(case: Case, *, open_by_default: bool = False) -> str:
-    chips = "".join(f'<span class="chip risk">{esc(risk)}</span>' for risk in case.risks[:3])
+    tier_chip = f'<span class="chip tier tier-{case.tier}">{TIER_LABEL[case.tier]}</span>'
+    chips = tier_chip + "".join(
+        f'<span class="chip risk">{esc(risk)}</span>' for risk in case.risks[:3]
+    )
     state_chip = f'<span class="chip state-{case.outcome}">{STATUS_LABEL[case.outcome]}</span>'
     reason = (
         f'<p class="reason">{esc(case.message)}</p>'
@@ -597,8 +669,10 @@ def render_row(case: Case, *, open_by_default: bool = False) -> str:
             '<details class="tracebox"><summary class="trace-toggle">Full output</summary>'
             f'<pre class="trace">{esc(case.detail)}</pre></details>'
         )
-    haystack = f"{case.node_id} {case.display_name} {case.message} {' '.join(case.risks)}".lower()
-    return f"""<details class="row is-{case.outcome}" data-state="{case.outcome}"
+    haystack = (
+        f"{case.node_id} {case.display_name} {case.message} {' '.join(case.risks)} {case.tier}"
+    ).lower()
+    return f"""<details class="row is-{case.outcome}" data-state="{case.outcome}" data-tier="{case.tier}"
          data-search="{esc(haystack)}"{" open" if open_by_default else ""}>
   <summary>
     <span class="title">{esc(case.display_name)}</span>
@@ -653,9 +727,61 @@ def build_html(cases: list[Case], meta: dict[str, str], label: str = "") -> str:
             ("skipped", "Skipped", "no service reachable"),
         ]
     )
+    tier_counter: Counter[str] = Counter(case.tier for case in cases)
+    tier_failing: Counter[str] = Counter(
+        case.tier for case in cases if case.outcome in ("failed", "error")
+    )
+    tiles += "".join(
+        f"""<div class="tile is-{tier}">
+      <dt>{TIER_LABEL[tier]} tests</dt>
+      <dd>{tier_counter[tier]}</dd>
+      <span class="sub">{
+            f"{tier_failing[tier]} failing" if tier_failing[tier] else "all green"
+        }</span>
+    </div>"""
+        for tier in TIER_ORDER
+        if tier_counter[tier]
+    )
 
     failing = [c for c in cases if c.outcome in ("failed", "error")]
     known = sorted((c for c in cases if c.outcome == "known"), key=lambda c: c.risks or ["zz"])
+
+    # Order failures by tier: a P0 and a P2 both being red are not the same event,
+    # and the reader should not have to work out which is which.
+    failing.sort(key=lambda c: (TIER_ORDER.index(c.tier), c.module, c.name))
+    failing_p0 = [c for c in failing if c.tier == "p0"]
+
+    if failing_p0:
+        p0_banner = f"""<div class="p0-alert">
+      <p><strong>{len(failing_p0)} P0 test{"s" if len(failing_p0) != 1 else ""} failing.</strong>
+        P0 means the service is doing its core job wrong — scoring, the flag decision,
+        which report counts as latest, or the endpoints disagreeing about one station.
+        Start here; everything else can wait.</p>
+      <ul>{"".join(f"<li>{esc(c.display_name)}</li>" for c in failing_p0)}</ul>
+    </div>"""
+    elif failing:
+        p0_banner = (
+            '<p class="p0-clear"><strong>P0 CLEAR</strong> — every failure below is P1 or P2. '
+            "The service's core behaviour is intact; these are narrower defects.</p>"
+        )
+    else:
+        p0_banner = ""
+
+    tier_rows = ""
+    for tier in TIER_ORDER:
+        in_tier = [c for c in cases if c.tier == tier]
+        if not in_tier:
+            continue
+        tier_counts: Counter[str] = Counter(c.outcome for c in in_tier)
+        tier_rows += f"""<tr>
+      <td><span class="tiername">{TIER_LABEL[tier]}</span><br><span class="layerblurb">{esc(TIER_BLURB[tier])}</span></td>
+      <td>{render_bar(tier_counts, len(in_tier))}</td>
+      <td class="num">{len(in_tier)}</td>
+      <td class="num">{tier_counts["passed"]}</td>
+      <td class="num">{tier_counts["failed"] + tier_counts["error"]}</td>
+      <td class="num">{tier_counts["known"]}</td>
+      <td class="num">{len(in_tier) / len(cases) * 100:.0f}%</td>
+    </tr>"""
 
     failing_section = (
         f"""<section id="failures">
@@ -714,6 +840,12 @@ def build_html(cases: list[Case], meta: dict[str, str], label: str = "") -> str:
         for state in ("failed", "known", "passed", "skipped")
         if counts[state]
     )
+    tier_filters = "".join(
+        f'<button type="button" class="filter" data-tier="{tier}" aria-pressed="false">'
+        f"{TIER_LABEL[tier]}</button>"
+        for tier in TIER_ORDER
+        if tier_counter[tier]
+    )
 
     label_block = (
         f'<p class="provenance"><strong>Run context</strong> {esc(label)}</p>' if label else ""
@@ -734,7 +866,28 @@ def build_html(cases: list[Case], meta: dict[str, str], label: str = "") -> str:
     {label_block}
   </header>
 
+  {p0_banner}
+
   <dl class="tiles">{tiles}</dl>
+
+  <section id="tiers">
+    <h2>By priority</h2>
+    <p class="lede">Tiers come from the risk register, not the layer a test lives in: the
+      tier answers &ldquo;which red test do I read first?&rdquo;. Every test declares exactly one,
+      and <code>tests/conftest.py</code> refuses to collect one that declares none — so a new
+      test cannot slip in untriaged.</p>
+    <div class="tablewrap">
+      <table>
+        <caption>Distribution and outcome per priority tier</caption>
+        <thead><tr>
+          <th scope="col">Tier</th><th scope="col">Mix</th><th scope="col">Tests</th>
+          <th scope="col">Pass</th><th scope="col">Fail</th><th scope="col">Known</th>
+          <th scope="col">Share</th>
+        </tr></thead>
+        <tbody>{tier_rows}</tbody>
+      </table>
+    </div>
+  </section>
 
   {failing_section}
   {known_section}
@@ -763,6 +916,8 @@ def build_html(cases: list[Case], meta: dict[str, str], label: str = "") -> str:
       <input type="search" id="q" placeholder="filter by name, path, risk ID or message"
              aria-label="Filter tests">
       {filters}
+      <span class="filter-sep" aria-hidden="true"></span>
+      {tier_filters}
     </div>
     {groups}
   </section>
@@ -812,10 +967,17 @@ def main() -> int:
     args.out.write_text(build_html(cases, meta, args.label), encoding="utf-8")
 
     counts: Counter[str] = Counter(c.outcome for c in cases)
+    tiers: Counter[str] = Counter(c.tier for c in cases)
+    p0_failing = sum(1 for c in cases if c.tier == "p0" and c.outcome in ("failed", "error"))
     print(
         f"{args.out}: {len(cases)} tests — "
         f"{counts['passed']} passed, {counts['failed'] + counts['error']} failed, "
         f"{counts['known']} known defects, {counts['skipped']} skipped"
+    )
+    print(
+        "  priority: "
+        + ", ".join(f"{TIER_LABEL[t]}={tiers[t]}" for t in TIER_ORDER if tiers[t])
+        + (f"  ** {p0_failing} P0 FAILING **" if p0_failing else "")
     )
     return 0
 

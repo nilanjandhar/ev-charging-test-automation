@@ -39,6 +39,26 @@ install-ui: install  ## Additionally install Playwright and its browser (~150MB)
 test:  ## The PR gate: unit + contract + api, no service required (~3s)
 	$(PYTEST) -m "$(GATE_MARKERS)"
 
+# --------------------------------------------------------------------------
+# Priority tiers — P0/P1/P2, derived from the risk register. See TEST_STRATEGY.md.
+# Orthogonal to the layer markers, so they compose: `-m "p0 and api"` works.
+# --------------------------------------------------------------------------
+.PHONY: test-p0
+test-p0:  ## P0 only: the service is doing its core job wrong. The fastest useful signal
+	$(PYTEST) -m "p0 and ($(GATE_MARKERS))"
+
+.PHONY: test-p1
+test-p1:  ## P1 only: real defects with a narrower blast radius
+	$(PYTEST) -m "p1 and ($(GATE_MARKERS))"
+
+.PHONY: test-p2
+test-p2:  ## P2 only: worth having, not worth blocking on
+	$(PYTEST) -m "p2 and ($(GATE_MARKERS))"
+
+.PHONY: smoke
+smoke:  ## Alias for test-p0 — what to run when you have seconds, not minutes
+	@$(MAKE) --no-print-directory test-p0
+
 .PHONY: test-unit
 test-unit:  ## Scoring boundaries and Hypothesis properties
 	$(PYTEST) -m unit

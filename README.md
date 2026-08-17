@@ -49,6 +49,36 @@ Requires Python 3.11+. Docker is needed only for the e2e and UI layers.
 | `make check` | `lint` + `typecheck` + `test` — what CI gates on | No |
 | `make test-report` | The gate, then an HTML report of the results | No |
 
+## Priority tiers
+
+Every test declares exactly one of **P0**, **P1** or **P2**, orthogonal to its
+layer. The tier answers "which red test do I read first?" and is derived from the
+risk register — full reasoning in
+[TEST_STRATEGY.md](TEST_STRATEGY.md#priority-tiers-p0--p1--p2) and per-test in
+[notes/risk-register.md](notes/risk-register.md#priority-tiers).
+
+| Tier | Means | Tests |
+|---|---|---|
+| **P0** | The service is doing its core job wrong: the score, the flag decision, which report counts as latest, or the endpoints disagreeing about one station. Stop and fix. | 42 |
+| **P1** | A real defect with a narrower blast radius, or a specific edge. Fix before release. | 53 |
+| **P2** | Worth having, not worth blocking on. File it. | 14 |
+
+```bash
+make smoke        # P0 only — 37 tests, ~1s. What to run when you have seconds
+make test-p0      # same thing, spelled out
+make test-p1
+make test-p2
+pytest -m "p0 and api"        # tiers compose with layer markers
+```
+
+`tests/conftest.py` **refuses to collect a test that declares no tier** (or that
+declares two), so a new test cannot slip in untriaged:
+
+```
+ERROR: these tests declare no priority tier — add @pytest.mark.p0/p1/p2
+  tests/unit/test_untiered_probe.py::test_someone_forgot_to_triage_me
+```
+
 ## The HTML report
 
 ```bash
@@ -61,7 +91,11 @@ A single self-contained page: pass/fail/known-defect counts, a proportion bar, t
 **full failure reason and pytest output for every failure**, a per-layer breakdown,
 and every test filterable by name, path, message or risk ID.
 
-Two things it does that a generic report does not:
+It leads with priority: a **P0 banner** naming every failing P0 test when there is
+one, per-tier counts, a tier chip on every row, and tier filters that compose with
+the status filters — so "P0 + Failed" is two clicks during a bad build.
+
+Two more things it does that a generic report does not:
 
 - **Known defects get their own section.** The suite's 8 `xfail`s are its most
   important output — each names a real service defect by risk ID. A generic report
@@ -138,8 +172,8 @@ tools/test_report.py      JUnit XML -> self-contained HTML report
 ```
 
 Markers are registered and `--strict-markers` is on, so a typo in a marker is an
-error rather than a silently-skipped test: `unit`, `contract`, `api`, `e2e`,
-`perf`, `ui`, `slow`.
+error rather than a silently-skipped test. Layer: `unit`, `contract`, `api`, `e2e`,
+`perf`, `ui`, `slow`. Priority: `p0`, `p1`, `p2`.
 
 ## Verifying the suite actually catches bugs
 

@@ -52,6 +52,7 @@ errors = st.integers(min_value=0, max_value=10_000)
 connectivity = st.sampled_from(["online", "offline"])
 
 
+@pytest.mark.p0
 @given(connectivity=connectivity, latency_ms=latency, error_count=errors)
 def test_score_stays_inside_its_reachable_range(
     connectivity: str, latency_ms: float, error_count: int
@@ -68,6 +69,7 @@ def test_score_stays_inside_its_reachable_range(
     assert score == round(score, 2), "the score contract is two decimal places"
 
 
+@pytest.mark.p0
 @given(
     connectivity=connectivity,
     latency_ms=latency,
@@ -90,6 +92,7 @@ def test_more_errors_never_improves_the_score(
     assert worse <= baseline
 
 
+@pytest.mark.p0
 @given(
     connectivity=connectivity,
     latency_ms=latency,
@@ -106,6 +109,7 @@ def test_more_latency_never_improves_the_score(
     assert worse <= baseline
 
 
+@pytest.mark.p1
 @given(
     connectivity=connectivity,
     latency_ms=latency,
@@ -129,6 +133,7 @@ def test_score_is_blind_to_error_count_above_the_cap(
     assert a == b
 
 
+@pytest.mark.p0
 @given(latency_ms=latency, error_count=errors)
 def test_going_offline_costs_forty_points_give_or_take_the_rounding(
     latency_ms: float, error_count: int
@@ -152,6 +157,7 @@ def test_going_offline_costs_forty_points_give_or_take_the_rounding(
     assert abs((online - offline) - 40.0) <= 0.01 + 1e-9
 
 
+@pytest.mark.p0
 @given(latency_ms=latency)
 def test_an_online_station_with_no_errors_can_never_be_flagged(latency_ms: float) -> None:
     """R2: latency alone is never enough to flag a station, at any value.
@@ -168,6 +174,7 @@ def test_an_online_station_with_no_errors_can_never_be_flagged(latency_ms: float
     assert is_flagged(score) is False
 
 
+@pytest.mark.p0
 @given(connectivity=connectivity, latency_ms=latency, error_count=errors)
 def test_flag_agrees_with_the_threshold_for_every_input(
     connectivity: str, latency_ms: float, error_count: int
@@ -184,6 +191,7 @@ def test_flag_agrees_with_the_threshold_for_every_input(
     assert is_flagged(score) == (score < FLAGGING_THRESHOLD)
 
 
+@pytest.mark.p0
 @given(
     connectivity=connectivity,
     latency_ms=latency,
@@ -203,6 +211,7 @@ def test_scoring_is_pure(connectivity: str, latency_ms: float, error_count: int)
     assert first == second
 
 
+@pytest.mark.p1
 @given(
     latency_ms=latency,
     error_count=errors,
@@ -228,6 +237,7 @@ def test_flagging_requires_more_than_connectivity_loss_alone(
     assert is_flagged(score) is True
 
 
+@pytest.mark.p1
 @pytest.mark.parametrize(
     "latency_ms",
     [0.0, 0.01, 0.05, 0.09, 0.0999],
@@ -254,6 +264,7 @@ def test_offline_station_with_sub_threshold_latency_rounds_back_to_unflagged(
     assert is_flagged(score) is False
 
 
+@pytest.mark.p1
 def test_rounding_step_can_decide_the_flag() -> None:
     """R15: at the boundary the last 0.01 is settled by binary float rounding.
 

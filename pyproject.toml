@@ -24,6 +24,10 @@ markers = [
     "perf: latency/concurrency smoke; reports numbers, never gates a merge",
     "ui: Playwright dashboard smoke",
     "slow: excluded from the PR gate by time cost, not by value",
+    # Priority tiers. Exactly one per test, enforced in tests/conftest.py.
+    "p0: the service is doing its core job wrong. Read this failure first",
+    "p1: a real defect with a narrower blast radius, or a specific edge",
+    "p2: worth having, not worth blocking on",
 ]
 # Warnings are errors: a DeprecationWarning from the service under test is a
 # finding, not noise. Third-party warnings we cannot fix are listed explicitly
@@ -42,6 +46,10 @@ filterwarnings = [
     # globally, so a resource leak anywhere else is still an error.
     "ignore::ResourceWarning:anyio.streams.memory",
 ]
+# xunit1 so that per-test properties survive into the XML: tests/conftest.py stamps
+# each test's resolved priority tier there, and tools/test_report.py reads it back.
+# That keeps one resolution point rather than re-deriving tiers from source.
+junit_family = "xunit1"
 asyncio_mode = "strict"
 asyncio_default_fixture_loop_scope = "function"
 

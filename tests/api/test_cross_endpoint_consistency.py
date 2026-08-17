@@ -36,6 +36,7 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
 pytestmark = pytest.mark.api
 
 
+@pytest.mark.p0
 def test_a_single_report_is_reflected_identically_by_every_endpoint(
     api_client: TestClient,
 ) -> None:
@@ -88,6 +89,7 @@ def test_a_single_report_is_reflected_identically_by_every_endpoint(
     }
 
 
+@pytest.mark.p0
 def test_flagged_stations_agree_across_list_worklist_and_metrics(
     api_client: TestClient,
 ) -> None:
@@ -143,6 +145,7 @@ def test_flagged_stations_agree_across_list_worklist_and_metrics(
     assert borderline not in flagged_in_worklist
 
 
+@pytest.mark.p0
 def test_metrics_aggregate_only_the_latest_report_per_station(
     api_client: TestClient,
 ) -> None:
@@ -185,6 +188,7 @@ def test_metrics_aggregate_only_the_latest_report_per_station(
     assert metrics["online_count"] + metrics["offline_count"] == metrics["total_stations"]
 
 
+@pytest.mark.p1
 def test_metrics_on_an_empty_network(api_client: TestClient) -> None:
     """R11: the zero case has to be representable, not a division by zero.
 
@@ -205,6 +209,7 @@ def test_metrics_on_an_empty_network(api_client: TestClient) -> None:
     }
 
 
+@pytest.mark.p2
 def test_station_listing_is_ordered_stably(api_client: TestClient) -> None:
     """R10: `/stations` is ordered by station_id and must stay that way.
 
@@ -223,6 +228,7 @@ def test_station_listing_is_ordered_stably(api_client: TestClient) -> None:
     assert station_ids(listing) == ids
 
 
+@pytest.mark.p1
 def test_one_absurd_latency_report_poisons_the_network_average(
     api_client: TestClient,
 ) -> None:
@@ -252,6 +258,7 @@ def test_one_absurd_latency_report_poisons_the_network_average(
     assert glitched_status["hygiene_score"] == 80.0, "...because the latency penalty caps at 20"
 
 
+@pytest.mark.p1
 def test_an_infinite_latency_report_erases_the_network_average_entirely(
     api_client: TestClient,
 ) -> None:
@@ -307,6 +314,7 @@ def test_an_infinite_latency_report_erases_the_network_average_entirely(
 # which is the only way a known-bug marker stays honest over time.
 
 
+@pytest.mark.p0
 @pytest.mark.xfail(
     strict=True,
     reason=(
@@ -339,6 +347,7 @@ def test_a_retried_report_does_not_duplicate_the_station_in_the_listing(
     assert station_ids(listing) == [sid]
 
 
+@pytest.mark.p0
 @pytest.mark.xfail(
     strict=True,
     reason=(
@@ -368,6 +377,7 @@ def test_a_retried_report_does_not_inflate_network_metrics(api_client: TestClien
     assert metrics["total_error_count"] == 2
 
 
+@pytest.mark.p1
 def test_a_retried_report_leaves_the_station_detail_view_correct(
     api_client: TestClient,
 ) -> None:

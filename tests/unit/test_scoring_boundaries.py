@@ -24,6 +24,7 @@ from app.scoring import compute_hygiene_score, is_flagged
 pytestmark = pytest.mark.unit
 
 
+@pytest.mark.p0
 @pytest.mark.parametrize(
     ("connectivity", "latency_ms", "error_count", "expected"),
     [
@@ -67,6 +68,7 @@ def test_score_at_each_threshold(
     assert compute_hygiene_score(connectivity, latency_ms, error_count) == expected
 
 
+@pytest.mark.p0
 @pytest.mark.parametrize(
     ("score", "expected_flagged"),
     [
@@ -88,6 +90,7 @@ def test_flagging_boundary_is_exclusive(score: float, expected_flagged: bool) ->
     assert is_flagged(score) is expected_flagged
 
 
+@pytest.mark.p0
 def test_dead_station_reporting_clean_metrics_is_not_flagged() -> None:
     """R2: an offline station with no errors and no latency scores exactly 60.0.
 
@@ -112,6 +115,7 @@ def test_dead_station_reporting_clean_metrics_is_not_flagged() -> None:
     )
 
 
+@pytest.mark.p1
 def test_error_penalty_saturates_so_catastrophe_is_indistinguishable() -> None:
     """R4: 6 errors and 100,000 errors produce the same score, and neither is flagged.
 
@@ -129,6 +133,7 @@ def test_error_penalty_saturates_so_catastrophe_is_indistinguishable() -> None:
     assert is_flagged(catastrophic) is False
 
 
+@pytest.mark.p2
 def test_score_floor_is_ten_making_the_zero_clamp_unreachable() -> None:
     """R7 / dead code: the documented range is [0, 100] but the reachable range is [10, 100].
 

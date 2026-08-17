@@ -98,6 +98,7 @@ def assert_conforms(
     return body
 
 
+@pytest.mark.p1
 def test_the_service_publishes_a_valid_openapi_document(openapi_schema: dict[str, Any]) -> None:
     """The schema itself must be well-formed 3.1 and cover every documented endpoint.
 
@@ -132,6 +133,7 @@ def test_the_service_publishes_a_valid_openapi_document(openapi_schema: dict[str
     }
 
 
+@pytest.mark.p1
 def test_every_documented_success_response_matches_its_schema(
     api_client: TestClient, openapi_schema: dict[str, Any]
 ) -> None:
@@ -175,6 +177,7 @@ def test_every_documented_success_response_matches_its_schema(
     assert_conforms(openapi_schema, api_client.get("/health"), "/health")
 
 
+@pytest.mark.p1
 def test_validation_errors_match_the_documented_error_schema(
     api_client: TestClient, openapi_schema: dict[str, Any]
 ) -> None:
@@ -191,6 +194,7 @@ def test_validation_errors_match_the_documented_error_schema(
     assert body["detail"][0]["loc"] == ["body", "latency_ms"]
 
 
+@pytest.mark.p1
 def test_metrics_summary_declares_a_nullable_average(openapi_schema: dict[str, Any]) -> None:
     """R11: `average_latency_ms` must stay nullable in the published schema.
 
@@ -214,6 +218,7 @@ def test_metrics_summary_declares_a_nullable_average(openapi_schema: dict[str, A
     }, "every metric is required — a client may not have to null-check the count fields"
 
 
+@pytest.mark.p2
 @pytest.mark.xfail(
     strict=True,
     reason=(
@@ -250,6 +255,7 @@ def test_the_404_the_service_actually_returns_is_documented(
     )
 
 
+@pytest.mark.p1
 @pytest.mark.xfail(
     strict=True,
     reason=(
@@ -303,6 +309,7 @@ def test_timestamps_conform_to_the_date_time_format_they_declare(
     assert not errors, f"{body['latest_timestamp']!r}: {errors}"
 
 
+@pytest.mark.p2
 def test_the_undocumented_404_body_is_at_least_consistent(api_client: TestClient) -> None:
     """R9, the part that is testable today: the shape clients have to reverse-engineer.
 
