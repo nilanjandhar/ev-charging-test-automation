@@ -1,0 +1,141 @@
+# Nightly: the layers whose value comes from breadth rather than speed, and which
+# would be pure latency in a merge gate. Nothing here blocks anyone; it opens
+# conversations the next morning.
+name: nightly
+
+on:
+  schedule:
+    - cron: "0 3 * * *" # 03:00 UTC, well clear of working hours in any timezone
+  workflow_dispatch:
+    inputs:
+      hypothesis_profile:
+        description: Hypothesis profile
+        default: nightly
+        type: choice
+        options: [nightly, ci]
+
+concurrency:
+  group: nightly
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: "3.11"
+
+jobs:
+  deep-properties:
+    name: hypothesis (broad profile)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: |
+            requirements-dev.txt
+            service/requirements.txt
+      - run: pip install -r requirements-dev.txt
+
+      # 1000 examples, not derandomised: the PR gate's job is to be reproducible,
+      # this job's job is to find the example the PR gate did not try. Both R15
+      # findings in the register came from exactly this difference.
+      - name: pytest -m unit
+        env:
+          HYPOTHESIS_PROFILE: ${{ inputs.hypothesis_profile || 'nightly' }}
+        run: pytest -m unit --junitxml=reports/junit-properties.xml
+
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-property-reports
+          path: reports/
+          retention-days: 30
+
+  fuzz:
+    name: schemathesis (large budget)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: |
+            requirements-dev.txt
+            service/requirements.txt
+      - run: pip install -r requirements-dev.txt
+
+      # 200 examples per operation against the ASGI app — no container needed,
+      # because what is being fuzzed is the schema/handler contract, not the
+      # deployment. Runs here rather than in the gate because shrinking a failure
+      # costs ~50s, which is a third of the gate's entire budget.
+      - name: pytest -m "contract and slow"
+        env:
+          HYPOTHESIS_PROFILE: nightly
+          SCHEMATHESIS_MAX_EXAMPLES: "200"
+        run: pytest -m "contract and slow" --junitxml=reports/junit-fuzz.xml
+
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-fuzz-reports
+          path: reports/
+          retention-days: 30
+
+  ui:
+    name: dashboard smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: |
+            requirements-ui.txt
+            requirements-dev.txt
+            service/requirements.txt
+      - run: pip install -r requirements-ui.txt
+
+      # ~150MB of browser. Nightly only: the PR gate does not run UI tests, so
+      # making every PR download chromium would be pure latency.
+      - run: playwright install --with-deps chromium
+
+      - run: docker compose -f service/docker-compose.yml up -d --build
+
+      - name: Wait for readiness
+        env:
+          BASE_URL: http://localhost:8000
+          READINESS_TIMEOUT_S: "120"
+        run: |
+          python - <<'PY'
+          import sys
+          from tests.helpers.clients import probe_service
+          from tests.helpers.config import SETTINGS
+          reason = probe_service(SETTINGS.base_url, SETTINGS.readiness_timeout_s)
+          if reason:
+              print(f"::error::{reason}")
+              sys.exit(1)
+          PY
+
+      - name: pytest -m ui
+        env:
+          BASE_URL: http://localhost:8000
+          TEST_ENV_LABEL: docker
+        run: pytest -m ui --junitxml=reports/junit-ui.xml
+
+      - name: Screenshots and traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-ui-artifacts
+          path: |
+            test-results/
+            reports/
+          retention-days: 14
+
+      - if: always()
+        run: docker compose -f service/docker-compose.yml down -v

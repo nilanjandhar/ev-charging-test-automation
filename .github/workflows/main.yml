@@ -1,0 +1,179 @@
+# Post-merge on main: everything the PR gate ran, plus the layers that need a
+# real deployment. Perf runs here too but cannot fail the workflow — see the
+# `continue-on-error` note on that job.
+name: main
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: main-${{ github.ref }}
+  cancel-in-progress: false # never cancel a main build; its result is a record
+
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: "3.11"
+  HYPOTHESIS_PROFILE: ci
+
+jobs:
+  gate:
+    name: unit + contract + api
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: |
+            requirements-dev.txt
+            service/requirements.txt
+      - run: pip install -r requirements-dev.txt
+      - run: |
+          pytest -m "not e2e and not perf and not ui and not slow" \
+            --junitxml=reports/junit-gate.xml \
+            --cov --cov-report=xml:reports/coverage.xml
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: main-gate-reports
+          path: reports/
+          retention-days: 30
+
+  e2e:
+    name: e2e against docker compose
+    runs-on: ubuntu-latest
+    needs: gate
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: |
+            requirements-dev.txt
+            service/requirements.txt
+      - run: pip install -r requirements-dev.txt
+
+      - name: Start the service
+        run: docker compose -f service/docker-compose.yml up -d --build
+
+      # A real readiness poll, never a fixed sleep. compose gives the `api`
+      # service no healthcheck (only `db` has one), so `up -d` returns as soon as
+      # the container starts — not when uvicorn is serving. The poll returns the
+      # instant /health answers and gives up at a deadline, so a slow runner waits
+      # and a broken deploy fails fast with a readable message.
+      - name: Wait for readiness
+        env:
+          BASE_URL: http://localhost:8000
+          READINESS_TIMEOUT_S: "120"
+        run: |
+          python - <<'PY'
+          import sys
+          from tests.helpers.clients import probe_service
+          from tests.helpers.config import SETTINGS
+          reason = probe_service(SETTINGS.base_url, SETTINGS.readiness_timeout_s)
+          if reason:
+              print(f"::error::{reason}")
+              sys.exit(1)
+          print("service is ready")
+          PY
+
+      - name: pytest -m e2e
+        env:
+          BASE_URL: http://localhost:8000
+          # Recorded alongside any number this job prints, because the container
+          # adds a 40ms floor that local runs do not have.
+          TEST_ENV_LABEL: docker
+          SIMULATED_LATENCY_MS: "40"
+        run: pytest -m "e2e and not perf" --junitxml=reports/junit-e2e.xml
+
+      - name: Service logs
+        if: failure()
+        run: docker compose -f service/docker-compose.yml logs --no-color --tail=200
+
+      - name: Tear down
+        if: always()
+        run: docker compose -f service/docker-compose.yml down -v
+
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: main-e2e-reports
+          path: reports/
+          retention-days: 30
+
+  perf:
+    name: perf smoke (non-blocking)
+    runs-on: ubuntu-latest
+    needs: gate
+    # The whole point of the split. A GitHub-hosted runner is shared hardware
+    # with no CPU guarantee, and the container adds a 40ms artificial floor
+    # (SIMULATED_LATENCY_MS), so a p95 measured here is a weather report, not a
+    # contract. It runs on every merge so the trend is visible in the logs, and
+    # it is a separate job so a red perf smoke is visually distinct from a red
+    # unit suite — nobody should ever be unsure whether main is broken or slow.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: |
+            requirements-dev.txt
+            service/requirements.txt
+      - run: pip install -r requirements-dev.txt
+
+      - run: docker compose -f service/docker-compose.yml up -d --build
+
+      - name: Wait for readiness
+        env:
+          BASE_URL: http://localhost:8000
+          READINESS_TIMEOUT_S: "120"
+        run: |
+          python - <<'PY'
+          import sys
+          from tests.helpers.clients import probe_service
+          from tests.helpers.config import SETTINGS
+          reason = probe_service(SETTINGS.base_url, SETTINGS.readiness_timeout_s)
+          if reason:
+              print(f"::error::{reason}")
+              sys.exit(1)
+          PY
+
+      - name: pytest -m perf
+        id: perf
+        env:
+          BASE_URL: http://localhost:8000
+          TEST_ENV_LABEL: docker
+          SIMULATED_LATENCY_MS: "40"
+          # Docker's 40ms floor plus runner noise. Catches an order-of-magnitude
+          # regression, which is the only claim this test can honestly make.
+          PERF_P95_BUDGET_MS: "250"
+        run: pytest -m perf -s --junitxml=reports/junit-perf.xml | tee reports/perf.txt
+
+      - name: Surface the numbers in the job summary
+        if: always()
+        run: |
+          {
+            echo "## Perf smoke (non-blocking)"
+            echo
+            echo '```'
+            grep -E "p50=|environment:|budget" reports/perf.txt || echo "no measurements captured"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - if: always()
+        run: docker compose -f service/docker-compose.yml down -v
+
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: main-perf-reports
+          path: reports/
+          retention-days: 30
