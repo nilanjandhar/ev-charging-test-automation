@@ -17,6 +17,8 @@ status and network metrics. The service is in [`service/`](service/) and is
   eight service defects found.
 - **[AI_USAGE.md](AI_USAGE.md)** — how I used an AI assistant: one output accepted,
   one substantially rewritten, one rejected.
+- **[notes/test-inventory.md](notes/test-inventory.md)** — every test, its tier, and
+  the risk it covers, in one table. Regenerate with `make inventory`.
 - **[notes/](notes/)** — the working artifacts behind the strategy: behaviour
   inventory, risk register, Docker-vs-local analysis, mutation-check output, and
   the raw AI journal.
@@ -158,6 +160,7 @@ tests/
   ui/                  one Playwright dashboard smoke
 tools/mutation_check.py   proves the suite catches real bugs
 tools/test_report.py      JUnit XML -> self-contained HTML report
+tools/test_inventory.py   test sources -> notes/test-inventory.md
 .github/workflows/        pr.yml (gates) · main.yml (+e2e, +perf) · nightly.yml
 ```
 

@@ -110,6 +110,10 @@ coverage:  ## Gate layers with coverage of the service, reported and written to 
 # --------------------------------------------------------------------------
 # HTML report
 # --------------------------------------------------------------------------
+.PHONY: inventory
+inventory:  ## Regenerate notes/test-inventory.md from the test sources
+	$(BIN)python tools/test_inventory.py
+
 .PHONY: report
 report:  ## Build reports/test-report.html from whatever JUnit XML is in reports/
 	$(BIN)python tools/test_report.py
