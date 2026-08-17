@@ -40,7 +40,7 @@ jobs:
       - run: pip install -r requirements-dev.txt
 
       # 1000 examples, not derandomised: the PR gate's job is to be reproducible,
-      # this job's job is to find the example the PR gate did not try. Both R15
+      # this job's job is to find the example the PR gate did not try. Both rounding
       # findings in the register came from exactly this difference.
       - name: pytest -m unit
         env:

@@ -65,7 +65,7 @@ MUTANTS: tuple[Mutant, ...] = (
         "app/scoring.py",
         "return score < FLAGGING_THRESHOLD",
         "return score <= FLAGGING_THRESHOLD",
-        "one keystroke. Decides whether a dead station at exactly 60.0 is flagged (R2)",
+        "one keystroke. Decides whether a dead station at exactly 60.0 is flagged",
     ),
     Mutant(
         "error-penalty-reduced",
