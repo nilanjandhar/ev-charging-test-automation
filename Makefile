@@ -69,7 +69,17 @@ test-ui:  ## One Playwright dashboard smoke test (needs `make install-ui`)
 
 .PHONY: test-all
 test-all:  ## Everything, including layers that need a running service
-	BASE_URL=$(BASE_URL) $(PYTEST) -s
+	# The UI layer runs in its own pytest process, deliberately. Playwright's sync
+	# API drives a greenlet-backed event loop, and if the browser fails to launch
+	# — the common case being `pip install -r requirements-ui.txt` without
+	# `playwright install chromium` — the loop is left in a state that makes
+	# *unrelated* asyncio and TestClient tests fail with
+	# "Runner.run() cannot be called from a running event loop". Observed while
+	# building this suite. Splitting the process bounds the blast radius to the
+	# layer that actually broke, and it mirrors CI, where the UI suite is its own
+	# job. `|| true` is not used: a real UI failure must still fail the target.
+	BASE_URL=$(BASE_URL) $(PYTEST) -s -m "not ui"
+	BASE_URL=$(BASE_URL) $(PYTEST) -m ui
 
 .PHONY: coverage
 coverage:  ## Gate layers with coverage of the service, reported and written to XML

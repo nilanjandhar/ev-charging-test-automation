@@ -193,7 +193,7 @@ aggregate assertions, no truncation, no re-import, parallel-safe, and zero chang
 Options A–C were not wasted: Option A is exactly right for the one layer where
 dependency overrides are impossible — e2e against a live container over real HTTP — so
 the suite uses **D in-process and A over the wire**, and `TEST_STRATEGY.md` says why.
-Full before/after is Example 2 in `AI_USAGE.md`.
+Full before/after is Example 2 in `AI_USAGE.md`; the vacuous-fuzz correction is 2b.
 
 ---
 
