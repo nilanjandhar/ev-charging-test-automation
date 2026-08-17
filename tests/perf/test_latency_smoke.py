@@ -20,8 +20,9 @@ the measured numbers are printed so a human can read the trend in CI logs, and t
 environment is recorded alongside them. The job never gates a merge —
 see `TEST_STRATEGY.md` on why perf reports rather than blocks.
 
-Risk covered: gross performance regression (an accidental N+1 over the report
-table, a lost index, a synchronous call added to the request path).
+Risks covered: **R21** (gross performance regression — an accidental N+1 over the
+report table, a lost index, a synchronous call added to the request path) and the
+affordable slice of **R13** (does the aggregate query degrade with history?).
 """
 
 from __future__ import annotations
@@ -96,7 +97,7 @@ def _measure(
 def test_read_and_write_latency_against_a_configured_budget(
     live_client: httpx.Client, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """Every documented endpoint answers within the configured p95 budget.
+    """R21: every documented endpoint answers within the configured p95 budget.
 
     The three endpoints are measured separately because they have different cost
     shapes: `/health` is a constant, `/metrics/summary` runs the latest-per-station

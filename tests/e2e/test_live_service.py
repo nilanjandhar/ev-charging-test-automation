@@ -12,6 +12,11 @@ override against a live process. Consequently **no test in this file asserts an
 absolute network-wide count** — only deltas and station-scoped facts. That
 constraint is exactly why the in-process layer exists.
 
+Risks covered: **R19** (the image serves the API but not the dashboard), **R20**
+(a debug deployment leaking stack traces), **R11** (the latest-per-station join
+behaving differently on PostgreSQL than on SQLite), and **R8** (`/health` proves
+liveness, not readiness).
+
 Skips cleanly with an actionable message when nothing is listening (see
 `live_service` in `tests/conftest.py`) rather than failing with a connection error.
 """
@@ -53,7 +58,7 @@ def test_health_endpoint_answers_over_real_http(live_client: httpx.Client) -> No
 
 
 def test_a_station_journey_over_the_wire(live_client: httpx.Client) -> None:
-    """The whole operator journey against the real deployment, in deltas.
+    """R11: the whole operator journey against the real deployment, in deltas.
 
     Ingest a degrading station, watch it appear in the listing, cross the flagging
     threshold, and show up on the worklist and in the metrics — through a real
@@ -121,7 +126,7 @@ def test_a_station_journey_over_the_wire(live_client: httpx.Client) -> None:
 
 
 def test_error_responses_serialise_correctly_over_http(live_client: httpx.Client) -> None:
-    """422 and 404 survive real serialisation, with real content types.
+    """R11: 422 and 404 survive real serialisation, with real content types.
 
     In-process tests get a Python object back from the ASGI app; here the body is
     bytes that a real client has to parse. A response-model or exception-handler
@@ -141,7 +146,7 @@ def test_error_responses_serialise_correctly_over_http(live_client: httpx.Client
 def test_the_deployment_serves_its_documentation_and_dashboard(
     live_client: httpx.Client,
 ) -> None:
-    """The static mount and the docs routes only exist in a real deployment.
+    """R19: the static mount and the docs routes only exist in a real deployment.
 
     `main.py:34-40` mounts `/static` and registers `/` **only if the directory
     exists on disk**. That condition is invisible to an in-process test using the
@@ -170,7 +175,7 @@ def test_the_deployment_serves_its_documentation_and_dashboard(
 
 
 def test_unknown_paths_do_not_leak_a_stack_trace(live_client: httpx.Client) -> None:
-    """A 404 from the real server is a JSON body, not a debug page.
+    """R20: a 404 from the real server is a JSON body, not a debug page.
 
     Cheap deployment check: uvicorn started with `--reload` or a framework debug
     flag renders HTML tracebacks on error, which leaks source paths and local
