@@ -88,17 +88,34 @@ coverage:  ## Gate layers with coverage of the service, reported and written to 
 		--junitxml=reports/junit.xml
 
 # --------------------------------------------------------------------------
+# HTML report
+# --------------------------------------------------------------------------
+.PHONY: report
+report:  ## Build reports/test-report.html from whatever JUnit XML is in reports/
+	$(BIN)python tools/test_report.py
+
+.PHONY: test-report
+test-report:  ## Run the gate, then build the HTML report — works whether it passed or not
+	# The leading `-` matters: pytest must be allowed to fail here, because a run
+	# with failures is exactly the run you want a report for. Without it, make
+	# would abort before the report was written and the reader would be left with
+	# terminal scrollback — which is the problem the report exists to solve.
+	-$(PYTEST) -m "$(GATE_MARKERS)" --junitxml=reports/junit.xml
+	$(BIN)python tools/test_report.py --label "local run, $$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo detached) @ $$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
+	@echo "open reports/test-report.html"
+
+# --------------------------------------------------------------------------
 # Quality
 # --------------------------------------------------------------------------
 .PHONY: lint
 lint:  ## ruff check + format check
-	$(BIN)ruff check tests
-	$(BIN)ruff format --check tests
+	$(BIN)ruff check tests tools
+	$(BIN)ruff format --check tests tools
 
 .PHONY: format
 format:  ## Apply ruff's formatter and autofixes
-	$(BIN)ruff check --fix tests
-	$(BIN)ruff format tests
+	$(BIN)ruff check --fix tests tools
+	$(BIN)ruff format tests tools
 
 .PHONY: typecheck
 typecheck:  ## mypy --strict over the test suite

@@ -47,6 +47,10 @@ jobs:
           HYPOTHESIS_PROFILE: ${{ inputs.hypothesis_profile || 'nightly' }}
         run: pytest -m unit --junitxml=reports/junit-properties.xml
 
+      - name: Build HTML report
+        if: always()
+        run: python tools/test_report.py --label "nightly · hypothesis broad profile (1000 examples)"
+
       - if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -77,6 +81,10 @@ jobs:
           HYPOTHESIS_PROFILE: nightly
           SCHEMATHESIS_MAX_EXAMPLES: "200"
         run: pytest -m "contract and slow" --junitxml=reports/junit-fuzz.xml
+
+      - name: Build HTML report
+        if: always()
+        run: python tools/test_report.py --label "nightly · schemathesis, 200 examples per operation"
 
       - if: always()
         uses: actions/upload-artifact@v4
@@ -127,8 +135,14 @@ jobs:
           TEST_ENV_LABEL: docker
         run: pytest -m ui --junitxml=reports/junit-ui.xml
 
-      - name: Screenshots and traces
-        if: failure()
+      - name: Build HTML report
+        if: always()
+        run: python tools/test_report.py --label "nightly · dashboard smoke vs docker compose"
+
+      # Uploaded unconditionally: the report is the point, and Playwright's traces
+      # and screenshots only exist on failure, which `path:` tolerates.
+      - name: Screenshots, traces and report
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: nightly-ui-artifacts
@@ -136,6 +150,7 @@ jobs:
             test-results/
             reports/
           retention-days: 14
+          if-no-files-found: warn
 
       - if: always()
         run: docker compose -f service/docker-compose.yml down -v

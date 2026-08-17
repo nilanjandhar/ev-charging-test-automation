@@ -37,8 +37,8 @@ jobs:
       - run: pip install -r requirements-dev.txt
       - name: ruff
         run: |
-          ruff check tests --output-format=github
-          ruff format --check tests
+          ruff check tests tools --output-format=github
+          ruff format --check tests tools
       - name: mypy --strict
         run: mypy
 
@@ -65,6 +65,15 @@ jobs:
           pytest -m "not e2e and not perf and not ui and not slow" \
             --junitxml=reports/junit.xml \
             --cov --cov-report=xml:reports/coverage.xml --cov-report=term-missing
+
+      # Built from the JUnit XML above, so it exists whether the run passed or
+      # failed — a report you only get on green is useless at the moment you need
+      # it. Downloadable from the artifact below; open test-report.html.
+      - name: Build HTML report
+        if: always()
+        run: |
+          python tools/test_report.py --label \
+            "PR #${{ github.event.pull_request.number }} · ${{ github.head_ref }} @ ${{ github.sha }} · job ${{ github.run_number }}"
 
       - name: Job summary
         # Runs on failure too — a summary you only get when green is a summary
@@ -98,6 +107,9 @@ jobs:
                       print(f"- `{case.get('classname')}::{case.get('name')}` — "
                             f"{(bad.get('message') or '').splitlines()[0][:200]}")
           PY
+            echo
+            echo "Full detail with every failure reason: download the"
+            echo "**pr-gate-reports** artifact below and open \`test-report.html\`."
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Publish reports

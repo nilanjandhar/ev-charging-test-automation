@@ -47,6 +47,34 @@ Requires Python 3.11+. Docker is needed only for the e2e and UI layers.
 | `make test-ui` | One Playwright dashboard smoke (`make install-ui` first) | **Yes** |
 | `make test-all` | Everything | Yes (others skip cleanly) |
 | `make check` | `lint` + `typecheck` + `test` — what CI gates on | No |
+| `make test-report` | The gate, then an HTML report of the results | No |
+
+## The HTML report
+
+```bash
+make test-report        # runs the gate, writes reports/test-report.html
+make report             # rebuild from whatever JUnit XML is already in reports/
+open reports/test-report.html
+```
+
+A single self-contained page: pass/fail/known-defect counts, a proportion bar, the
+**full failure reason and pytest output for every failure**, a per-layer breakdown,
+and every test filterable by name, path, message or risk ID.
+
+Two things it does that a generic report does not:
+
+- **Known defects get their own section.** The suite's 8 `xfail`s are its most
+  important output — each names a real service defect by risk ID. A generic report
+  buries those under "skipped"; here they are surfaced with their reasons.
+- **Every test shows the risk ID it protects.** Risk IDs are read from the test
+  docstrings (JUnit XML has no docstrings), so you can filter for `R2` and see
+  exactly which tests cover it. Definitions are in
+  [notes/risk-register.md](notes/risk-register.md).
+
+`make test-report` deliberately lets pytest fail without aborting — a run *with*
+failures is exactly the run you want a report for. Every CI job builds the same
+report with `if: always()` and ships it in its artifact, stamped with the branch
+and commit it came from.
 
 Layers that need a service **skip with an actionable message** when nothing is
 listening, rather than failing with a connection error:
@@ -105,6 +133,7 @@ tests/
   perf/                latency budget + concurrent-write invariants
   ui/                  one Playwright dashboard smoke
 tools/mutation_check.py   proves the suite catches real bugs
+tools/test_report.py      JUnit XML -> self-contained HTML report
 .github/workflows/        pr.yml (gates) · main.yml (+e2e, +perf) · nightly.yml
 ```
 

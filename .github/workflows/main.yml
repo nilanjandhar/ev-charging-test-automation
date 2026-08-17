@@ -37,6 +37,9 @@ jobs:
           pytest -m "not e2e and not perf and not ui and not slow" \
             --junitxml=reports/junit-gate.xml \
             --cov --cov-report=xml:reports/coverage.xml
+      - name: Build HTML report
+        if: always()
+        run: python tools/test_report.py --label "main @ ${{ github.sha }} · gate"
       - if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -91,6 +94,12 @@ jobs:
           TEST_ENV_LABEL: docker
           SIMULATED_LATENCY_MS: "40"
         run: pytest -m "e2e and not perf" --junitxml=reports/junit-e2e.xml
+
+      # Merges every JUnit file present, so the e2e job's report covers the whole
+      # containerised run rather than one file.
+      - name: Build HTML report
+        if: always()
+        run: python tools/test_report.py --label "main @ ${{ github.sha }} · e2e vs docker compose"
 
       - name: Service logs
         if: failure()
