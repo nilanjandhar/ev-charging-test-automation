@@ -5,28 +5,18 @@ Hypothesis: a pure function, a small well-defined input domain, and real algebra
 invariants. Everything else in the service is I/O over a database, where
 Hypothesis mostly generates expensive ways to rediscover that SQL works.
 
-**Which of the suggested invariants I kept, and which I rejected.**
+Two invariants were tightened rather than taken as offered: the range is asserted
+as the *reachable* [10, 100] rather than the documented [0, 100], because the
+documented one survives a mutation that doubles every penalty; and monotonicity is
+non-increasing rather than strict, because the penalties saturate.
 
-* *"score is always within its documented range"* — kept, but tightened. The
-  documented range is [0, 100]; the **reachable** range is [10, 100] (max penalty
-  is 90). Asserting the documented range would pass against a mutation that
-  doubled every penalty. Asserting the reachable one would not.
-* *"increasing error_count never increases the score"* — kept as stated
-  (non-increasing). It is tempting to write it as strictly decreasing; that is
-  false, because the penalty saturates at 6 errors. The saturation deserves its
-  own property, so it gets one.
-* *"increasing latency_ms never increases the score"* — same, saturating at 400 ms.
-* *"ingesting the same report twice yields the same station status as once"* —
-  **rejected here, and it is not universally true.** It holds for
-  `/stations/{id}/status` and is false for `/stations` and `/metrics/summary`
-  (risk R1: both tied rows survive the latest-per-station join). It is a stateful
-  property about HTTP and a database, so it lives in
-  `tests/api/test_cross_endpoint_consistency.py` where it can be stated precisely
-  per endpoint. Driving it through Hypothesis would mean a function-scoped
-  database fixture shared across examples — the classic Hypothesis anti-pattern.
-* *"a station's status always reflects its most recent report by timestamp,
-  regardless of arrival order"* — same reasoning; it is an API-layer property and
-  it is covered explicitly in `tests/api/test_recency_semantics.py`.
+Two more were rejected here entirely — "ingesting the same report twice is
+idempotent" and "status always reflects the newest timestamp". Both are stateful
+properties about HTTP and a database, and the first is not even universally true
+(it holds for `/stations/{id}/status` and is false for `/stations`, risk R1).
+Driving them through Hypothesis would need a function-scoped database fixture
+shared across examples — the classic anti-pattern — so they are explicit tests in
+`tests/api/` instead.
 
 Risks covered: **R7** (constant regressions), **R4** (saturation blind spot),
 **R2** (an online station with no errors can never be flagged).

@@ -121,7 +121,7 @@ test-report:  ## Run the gate, then build the HTML report — works whether it p
 	# would abort before the report was written and the reader would be left with
 	# terminal scrollback — which is the problem the report exists to solve.
 	-$(PYTEST) -m "$(GATE_MARKERS)" --junitxml=reports/junit.xml
-	$(BIN)python tools/test_report.py --label "local run, $$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo detached) @ $$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
+	$(BIN)python tools/test_report.py
 	@echo "open reports/test-report.html"
 
 # --------------------------------------------------------------------------

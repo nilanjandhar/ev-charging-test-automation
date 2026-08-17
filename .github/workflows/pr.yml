@@ -71,46 +71,7 @@ jobs:
       # it. Downloadable from the artifact below; open test-report.html.
       - name: Build HTML report
         if: always()
-        run: |
-          python tools/test_report.py --label \
-            "PR #${{ github.event.pull_request.number }} · ${{ github.head_ref }} @ ${{ github.sha }} · job ${{ github.run_number }}"
-
-      - name: Job summary
-        # Runs on failure too — a summary you only get when green is a summary
-        # nobody reads at the moment they need it.
-        if: always()
-        run: |
-          {
-            echo "## PR gate"
-            echo
-            python - <<'PY'
-          import xml.etree.ElementTree as ET, pathlib
-          report = pathlib.Path("reports/junit.xml")
-          if not report.exists():
-              print("No JUnit report produced — the run failed before pytest started.")
-              raise SystemExit
-          suite = ET.parse(report).getroot().find("testsuite") or ET.parse(report).getroot()
-          get = lambda key: int(suite.get(key, 0))
-          total, failures, errors = get("tests"), get("failures"), get("errors")
-          skipped, time_s = get("skipped"), float(suite.get("time", 0))
-          print(f"| metric | value |\n| --- | --- |")
-          print(f"| tests | {total} |")
-          print(f"| failures | {failures} |")
-          print(f"| errors | {errors} |")
-          print(f"| skipped / xfailed | {skipped} |")
-          print(f"| duration | {time_s:.1f}s |")
-          print()
-          if failures or errors:
-              print("### Failures")
-              for case in suite.iter("testcase"):
-                  for bad in list(case.iter("failure")) + list(case.iter("error")):
-                      print(f"- `{case.get('classname')}::{case.get('name')}` — "
-                            f"{(bad.get('message') or '').splitlines()[0][:200]}")
-          PY
-            echo
-            echo "Full detail with every failure reason: download the"
-            echo "**pr-gate-reports** artifact below and open \`test-report.html\`."
-          } >> "$GITHUB_STEP_SUMMARY"
+        run: python tools/test_report.py
 
       - name: Publish reports
         if: always()

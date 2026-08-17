@@ -9,15 +9,8 @@ what lets a handful of tests be written once and run in both places — see the
 from __future__ import annotations
 
 import time
-from typing import TYPE_CHECKING
 
 import httpx
-
-if TYPE_CHECKING:  # pragma: no cover - typing only
-    from collections.abc import Iterator
-
-#: Both the in-process and the live client satisfy this type.
-HttpClient = httpx.Client
 
 
 def live_client(base_url: str, timeout: float = 30.0) -> httpx.Client:
@@ -60,13 +53,3 @@ def probe_service(base_url: str, timeout_s: float) -> str | None:
         f"(last: {last_error}). Start it with `make run-service` or "
         f"`docker compose -f service/docker-compose.yml up -d`, or point BASE_URL elsewhere."
     )
-
-
-def iter_paths(openapi: dict[str, object]) -> Iterator[tuple[str, str]]:
-    """Yield `(method, path)` for every operation the service documents."""
-    paths = openapi.get("paths", {})
-    assert isinstance(paths, dict)
-    for path, operations in sorted(paths.items()):
-        assert isinstance(operations, dict)
-        for method in sorted(operations):
-            yield method.upper(), path

@@ -261,19 +261,3 @@ def live_client(live_service: str) -> Iterator[httpx.Client]:
     """
     with clients.live_client(live_service) as client:
         yield client
-
-
-@pytest.fixture(params=["in-process", "live-http"])
-def any_client(request: pytest.FixtureRequest) -> httpx.Client:
-    """Runs a test through both transports where the same assertions hold.
-
-    Used sparingly — only for behaviour that must be identical in-process and over
-    the wire (JSON serialisation, status codes, error envelopes). Anything that
-    needs an empty database cannot use this, and says so.
-    """
-    if request.param == "in-process":
-        client: httpx.Client = request.getfixturevalue("api_client")
-        return client
-    request.node.add_marker(pytest.mark.e2e)
-    live: httpx.Client = request.getfixturevalue("live_client")
-    return live

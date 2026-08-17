@@ -231,22 +231,11 @@ def test_the_404_the_service_actually_returns_is_documented(
 ) -> None:
     """R9: a status code the service returns must appear in the schema it publishes.
 
-    This is the one contract failure that a schema generated from the code cannot
-    catch by construction: `HTTPException(404)` is raised in the handler body, so
-    FastAPI has no way to infer it, and nobody added `responses={404: ...}` to the
-    decorator.
-
-    The consequence is concrete. A client generated from this schema — and
-    "generate the client from the OpenAPI doc" is the entire reason a service
-    publishes one — has no branch for 404. Depending on the generator it throws an
-    unhandled exception or, worse, returns a partially-populated model for a
-    station that does not exist.
-
-    Asserted as `xfail(strict=True)` because this is the correct behaviour and the
-    service does not have it. When someone adds `responses={404: ...}`, this XPASSes,
-    the strict marker fails the build, and whoever fixed it is told to delete the
-    marker and the known-issues entry. That is the only way a known-bug marker
-    stays truthful.
+    The one contract failure a code-generated schema cannot catch by construction:
+    `HTTPException(404)` is raised in the handler body, so FastAPI cannot infer it
+    and nobody added `responses={404: ...}`. A client generated from this schema
+    therefore has no branch for 404 — which is the entire reason a service
+    publishes one.
     """
     responses = openapi_schema["paths"]["/stations/{station_id}/status"]["get"]["responses"]
 
@@ -269,24 +258,14 @@ def test_timestamps_conform_to_the_date_time_format_they_declare(
 ) -> None:
     """R16/R6: the service violates its own published `format: date-time`.
 
-    Found by schemathesis, not by hand, and it is worth being precise about why:
-    `format` is an *annotation* in JSON Schema, so `jsonschema` ignores it unless a
-    format checker is supplied, which is why the structural conformance tests above
-    pass. Schemathesis validates formats by default. Two tools, two default
+    Found by schemathesis, and the reason is worth recording: `format` is an
+    *annotation* in JSON Schema, so `jsonschema` ignores it unless given a format
+    checker — which is why the structural tests above pass. Two tools, two default
     strictness levels, and the gap between them was a real bug.
 
-    It is a real bug rather than pedantry. RFC 3339 requires an offset, so
-    `2024-06-01T10:00:00` is not a `date-time`. Consequences, in increasing order
-    of annoyance: a strict generated client rejects the response outright; a
-    lenient one parses it as browser-local time, which is exactly what the
-    dashboard does (`static/index.html:108`); and nobody can tell whether a
-    reported timestamp is UTC or the station's local time — which is the same root
-    cause as R6.
-
-    Asserted with a format checker so it fails for the right reason, and strict so
-    that fixing R16 (make the column timezone-aware, or declare the field as a
-    naive string) trips the build and forces the known-defect allowlist in
-    `test_schemathesis_fuzz.py` to be cleaned up with it.
+    RFC 3339 requires an offset, so `2024-06-01T10:00:00` is not a `date-time`. A
+    strict generated client rejects it; a lenient one parses it as browser-local
+    time, which is what the dashboard does (`static/index.html:108`).
     """
     from jsonschema import FormatChecker
 

@@ -278,21 +278,13 @@ def test_an_enormous_error_count_is_rejected_rather_than_crashing_ingest(
 ) -> None:
     """R17: schema-valid input that reaches the storage layer and blows up there.
 
-    Found by schemathesis, which generated `error_count: 9223372036854775808` —
-    exactly 2**63, one past the signed 64-bit maximum. Python integers are
-    unbounded so Pydantic accepts it; `models.py:14` is a plain `Integer` column, so
-    the driver raises `OverflowError` and FastAPI turns it into a 500.
+    Found by schemathesis, which generated exactly 2**63 — one past the signed
+    64-bit maximum. Python ints are unbounded so Pydantic accepts it; `models.py:14`
+    is a plain `Integer` column, so the driver raises `OverflowError` and FastAPI
+    turns it into a 500. Boundary verified: 2**63 - 1 scores 69.5, 2**63 is a 500.
 
-    Verified boundary: 2**63 - 1 is accepted and scored (69.5); 2**63 is a 500.
-
-    Why it matters beyond tidiness: the ingest endpoint is unauthenticated, so any
-    caller — or one station with a corrupted or wrapped counter — turns a 60-byte
-    request into a stack trace and a 500. Validation that a storage layer then
-    rejects is validation in the wrong place; the fix is a `le=` bound in
-    `schemas.py` so the 422 happens at the edge.
-
-    Asserted as the 422 this *should* be, strict, so that the fix retires both this
-    marker and the R17 entry in the fuzz suite's known-defect allowlist.
+    Validation that the storage layer then rejects is validation in the wrong
+    place; the fix is a `le=` bound in `schemas.py` so the 422 happens at the edge.
     """
     response = api_client_observing_500s.post("/reports", json=report(error_count=2**63))
 

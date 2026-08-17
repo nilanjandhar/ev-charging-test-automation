@@ -87,28 +87,18 @@ make report             # rebuild from whatever JUnit XML is already in reports/
 open reports/test-report.html
 ```
 
-A single self-contained page: pass/fail/known-defect counts, a proportion bar, the
-**full failure reason and pytest output for every failure**, a per-layer breakdown,
-and every test filterable by name, path, message or risk ID.
+A single self-contained page (~340 lines of Python, no extra plugin): pass/fail/
+known-defect counts, a proportion bar, the **full failure reason and pytest output
+for every failure**, a per-tier breakdown, and every test grouped by module.
 
-It leads with priority: a **P0 banner** naming every failing P0 test when there is
-one, per-tier counts, a tier chip on every row, and tier filters that compose with
-the status filters — so "P0 + Failed" is two clicks during a bad build.
-
-Two more things it does that a generic report does not:
-
-- **Known defects get their own section.** The suite's 8 `xfail`s are its most
-  important output — each names a real service defect by risk ID. A generic report
-  buries those under "skipped"; here they are surfaced with their reasons.
-- **Every test shows the risk ID it protects.** Risk IDs are read from the test
-  docstrings (JUnit XML has no docstrings), so you can filter for `R2` and see
-  exactly which tests cover it. Definitions are in
-  [notes/risk-register.md](notes/risk-register.md).
+It leads with priority: a **P0 banner** naming every failing P0 test, a per-tier
+table, and a tier chip on every row. Known defects get their own section rather than
+being filed under "skipped" — the suite's 8 `xfail`s each name a real service defect,
+and they are the most important thing the run produces.
 
 `make test-report` deliberately lets pytest fail without aborting — a run *with*
 failures is exactly the run you want a report for. Every CI job builds the same
-report with `if: always()` and ships it in its artifact, stamped with the branch
-and commit it came from.
+report with `if: always()` and ships it in its artifact.
 
 Layers that need a service **skip with an actionable message** when nothing is
 listening, rather than failing with a connection error:
@@ -181,10 +171,10 @@ error rather than a silently-skipped test. Layer: `unit`, `contract`, `api`, `e2
 python tools/mutation_check.py
 ```
 
-It copies `service/` to a scratch directory, breaks it in sixteen specific ways,
-and reports which tests died. `service/` itself is never touched. Fifteen mutants
-are real bugs and must be killed; the sixteenth is a no-op control that must
-survive — without it, "everything went red" would be unfalsifiable. Last run:
+It copies `service/` to a scratch directory, breaks it in eight specific ways, and
+reports which tests died. `service/` itself is never touched. Seven mutants are real
+bugs and must be killed; the eighth is a no-op control that must survive — without
+it, "everything went red" would be unfalsifiable. Last run:
 [notes/mutation-check.md](notes/mutation-check.md).
 
 ## A note on what is red on purpose

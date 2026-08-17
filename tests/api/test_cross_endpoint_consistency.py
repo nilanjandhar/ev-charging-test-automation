@@ -264,21 +264,16 @@ def test_an_infinite_latency_report_erases_the_network_average_entirely(
 ) -> None:
     """R18: one report of `Infinity` and the latency KPI silently becomes null.
 
-    JSON has no infinity literal, but `1e999` parses to `float('inf')`, and
-    `schemas.py:11` only bounds `latency_ms` from below (`ge=0`) — so inf is
-    accepted with a 201. The mean then becomes inf, and Pydantic serialises a
-    non-finite float as JSON `null`.
+    JSON has no infinity literal, but `1e999` parses to `float('inf')` and
+    `schemas.py:11` bounds `latency_ms` only from below, so it is accepted. The mean
+    becomes inf, and Pydantic serialises a non-finite float as JSON `null`.
 
-    That is worse than R5's distortion. `average_latency_ms: null` is exactly what a
-    *healthy, empty* network returns, and the dashboard renders both as 'N/A'
-    (`static/index.html:94-96`). So the operator cannot distinguish "no stations
-    have reported yet" from "your network latency metric has been destroyed by one
-    bad sensor", and no alert built on that field will fire either — nulls do not
-    breach thresholds.
+    Worse than R5's distortion: `null` is exactly what a *healthy, empty* network
+    returns, and the dashboard renders both as 'N/A'. The operator cannot tell the
+    two apart, and no threshold alert fires on a null.
 
     Sent as raw content because Python's own `json.dumps` refuses to emit
-    non-finite floats: this payload can only arrive from a client whose JSON
-    writer is more permissive, which is precisely the embedded-device case.
+    non-finite floats — this payload only arrives from a laxer client.
     """
     normal = station_id()
     api_client.post("/reports", json=report(station_id_=normal, latency_ms=100.0, error_count=0))

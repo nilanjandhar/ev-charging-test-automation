@@ -88,16 +88,13 @@ def test_a_future_dated_report_permanently_masks_every_later_report(
     every genuine report loses the `MAX(timestamp)` comparison. The station's
     status is frozen at whatever it claimed while its clock was wrong.
 
-    The severity depends entirely on *what* it froze at, and the bad case is the
-    quiet one: frozen at "online, score 100", the station is permanently green,
-    permanently absent from the worklist, and indistinguishable from a healthy
-    charger — even after it goes offline and reports 50 errors, as it does here.
+    The bad case is the quiet one: frozen at "online, score 100" the station is
+    permanently green and indistinguishable from a healthy charger — even after it
+    goes offline and reports 50 errors, as it does here.
 
-    This test pins current behaviour rather than asserting a fix, because the fix
-    is a product decision (reject future timestamps? clamp them? rank by
-    `created_at`, which the service already stores but never exposes?) and I am
-    not entitled to invent one. It is written up as R3 in the known-issues section
-    so that whoever makes that decision starts from a reproduction.
+    Pins current behaviour rather than asserting a fix: the fix is a product
+    decision (reject? clamp? rank by the already-stored `created_at`?) and not mine
+    to invent. Written up as R3 so whoever makes it starts from a reproduction.
     """
     sid = station_id()
 

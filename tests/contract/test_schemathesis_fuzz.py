@@ -1,41 +1,18 @@
 """Schema-driven fuzzing against the service's own OpenAPI document.
 
-`test_openapi_conformance.py` asserts that the responses *I* thought to produce
-match the schema. This asserts the same thing for the responses I did not think
-of, by generating inputs from the schema itself. The two are complementary: the
-handwritten file encodes intent, this one encodes coverage.
+`test_openapi_conformance.py` covers the responses I thought of; this covers the
+ones I did not, by generating inputs from the schema. Marker-gated (`contract` +
+`slow`) and bounded by `SCHEMATHESIS_MAX_EXAMPLES` — 15 per operation in CI, 200
+nightly — because an unbounded fuzz suite eventually becomes the slowest thing in
+the pipeline and gets deleted.
 
-Marker-gated (`contract` + `slow`) and bounded by `SCHEMATHESIS_MAX_EXAMPLES` —
-15 per operation in the PR gate, 200 nightly. A fuzz suite with an unbounded
-example budget is a fuzz suite nobody runs, because it eventually becomes the
-slowest thing in the pipeline and gets deleted.
-
-**Which checks are enabled, and why.**
-
-* `not_a_server_error` — a 500 from generated-but-schema-valid input is always a
-  defect. This is the check that earns the suite its place.
-* `status_code_conformance` — the service must not return codes it does not
-  document. One known exception, handled per-operation below.
-* `response_schema_conformance` — response bodies match their declared schemas
-  across inputs I would not have written by hand.
-* `content_type_conformance` and `response_headers_conformance` — cheap, and they
-  catch a hand-rolled `Response` that forgets its content type.
-
-**Deliberately not enabled:**
-
-* `negative_data_rejection` — it asserts that schema-invalid input is rejected.
-  This service accepts `"120"` for a float because Pydantic's lax mode coerces it,
-  which is a deliberate framework default that real embedded clients depend on.
-  The behaviour is pinned explicitly in `tests/api/test_ingest_validation.py`
-  with the reasoning attached; having a fuzzer re-report it as a failure on every
-  run would be noise, and noisy suites get muted.
-* `positive_data_acceptance` — the inverse, and it produces the same argument in
-  reverse for the same input domain.
-* `ignored_auth`, `missing_required_header`, `use_after_free`,
-  `ensure_resource_availability`, `unsupported_method` — the service has no
-  authentication, no required headers, and no resource lifecycle. These checks
-  would pass vacuously, and a vacuous check is worse than an absent one: it
-  reports coverage that does not exist.
+Checks enabled: `not_a_server_error` (a 500 from schema-valid input is always a
+defect — this is what earns the suite its place), plus status-code, schema,
+content-type and header conformance. Not enabled: `negative_data_rejection` and
+`positive_data_acceptance`, because this service deliberately accepts `"120"` for
+a float (Pydantic lax mode, pinned in `test_ingest_validation.py`) and a fuzzer
+re-reporting that every night is noise; and the auth/header/lifecycle checks,
+which would pass vacuously against a service that has none of those things.
 """
 
 from __future__ import annotations

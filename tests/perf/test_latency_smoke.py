@@ -4,21 +4,15 @@ This measures one thing honestly and refuses to pretend it measures more: whethe
 the service has regressed by an *order of magnitude* on the machine the test
 happened to run on. It is not a benchmark, it is a tripwire.
 
-Why so modest a claim:
+Why so modest a claim: Docker sets `SIMULATED_LATENCY_MS=40` and sleeps that long
+on every request, against a ~1.3 ms local baseline — so the *environment* moves the
+number 30x before any code does (`notes/docker-vs-local.md`). Neither environment
+pins CPU, and the service is a single uvicorn worker, so a real load harness would
+be measuring the runner.
 
-* The Docker environment sets `SIMULATED_LATENCY_MS=40` (`docker-compose.yml:27`),
-  and `main.py:23-27` sleeps that long on every request. The local baseline for
-  the same endpoint is ~1.3 ms. So the *environment* changes the number by 30x
-  before any code does. See `notes/docker-vs-local.md`.
-* Neither environment pins CPU or memory: compose declares no limits, and a
-  GitHub-hosted runner is shared hardware.
-* The service is a single uvicorn worker with an in-process database. A real load
-  harness pointed at it would be measuring the runner, not the service.
-
-So: the budget comes from configuration (`PERF_P95_BUDGET_MS`, default 250 ms),
-the measured numbers are printed so a human can read the trend in CI logs, and the
-environment is recorded alongside them. The job never gates a merge —
-see `TEST_STRATEGY.md` on why perf reports rather than blocks.
+So the budget comes from configuration (`PERF_P95_BUDGET_MS`, default 250 ms), the
+numbers and the environment are printed for the CI log, and the job never gates a
+merge.
 
 Risks covered: **R21** (gross performance regression — an accidental N+1 over the
 report table, a lost index, a synchronous call added to the request path) and the

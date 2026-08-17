@@ -88,55 +88,40 @@ Every one of those corrections came from curl output, not from re-reading the so
 
 ## Priority tiers
 
-Every test in the suite declares exactly one tier — P0, P1 or P2 — enforced at
-collection time (`tests/conftest.py`). The tier is derived from this register but
-answers a different question: the register asks *how bad is this failure mode*,
-the tier asks *which red test do I read first*. Definitions and the CI rationale
-are in `TEST_STRATEGY.md`; this is the per-test mapping and why each call was made.
+Every test declares exactly one tier — enforced at collection time in
+`tests/conftest.py`. The register asks *how bad is this failure mode*; the tier asks
+*which red test do I read first*. Definitions and CI rationale are in
+`TEST_STRATEGY.md`; this is the mapping and the calls worth defending.
 
-**P0 — the service is doing its core job wrong.** 42 tests.
+**P0 (42 tests) — the service is doing its core job wrong.** Every scoring and flag
+boundary plus the range/monotonicity/purity properties (R7); the two R2 blind-spot
+tests; the three cross-endpoint agreement tests and both duplicate-report xfails
+(R11, R1); both recency tests (R3); the live health check and station journey (R8,
+R11); the concurrent-write test, because a lost write is data loss; and
+`unknown_fields_...cannot_override_the_computed_score`, which covers no numbered
+risk and is P0 anyway — a client that could post its own `hygiene_score` would
+defeat the entire service. That last one is a judgment call, not a mechanical
+mapping.
 
-| Covers | Tests | Why P0 |
-|---|---|---|
-| R7 | every scoring boundary and the flag boundary; the range, monotonicity, purity, offline-delta and flag-agreement properties | These are the numbers that decide truck rolls. A wrong constant re-scores the whole fleet at once, and nothing else in the suite goes red first |
-| R2 | `dead_station_reporting_clean_metrics_is_not_flagged`, `an_online_station_with_no_errors_can_never_be_flagged` | The top-ranked risk. A dead charger absent from the worklist is the failure this service exists to prevent |
-| R11 | `a_single_report_is_reflected_identically_by_every_endpoint`, `flagged_stations_agree_across_list_worklist_and_metrics`, `metrics_aggregate_only_the_latest_report_per_station` | If the four endpoints disagree about one station, the tool is worse than useless — and that distrust is not recoverable by a hotfix |
-| R3 | `status_reflects_the_newest_timestamp_not_the_newest_arrival`, `a_future_dated_report_permanently_masks_every_later_report` | Recency *is* the product. Get it wrong and every downstream number is stale |
-| R1 | both duplicate-report `xfail`s | An at-least-once retry silently inflates every network-level number |
-| — | `unknown_fields_are_ignored_and_cannot_override_the_computed_score` | Covers no numbered risk, and still P0: a client that could post its own `hygiene_score` would defeat the entire service. Judgment call, not a mechanical mapping |
-| R8, R11 | `health_endpoint_answers_over_real_http`, `a_station_journey_over_the_wire` | Every other job's readiness poll depends on the first; the second is the only place the join runs against PostgreSQL |
-| R11 | `concurrent_reports_for_one_station_all_land` | A lost write is data loss, regardless of which marker the test carries |
+**P1 (53 tests)** — R4 saturation, R5/R18 metric poisoning and erasure, R6 timezone
+semantics, R15 rounding edges, R17 and its boundary, R9's 422 envelope, R16, the
+validation-contract set, the fuzz suite, and the remaining concurrency invariants.
 
-**P1 — a real defect, narrower blast radius or a specific edge.** 53 tests.
+Two calls worth defending. **R16 is register-rank 3 but P1**: the blast radius is
+client-side deserialisation, not a wrong dispatch — an operator reading a mangled
+timestamp still gets the right station on the right worklist. **R17 is an unhandled
+500 and still P1**: a server error is normally the worst class, but it needs
+`error_count ≥ 2**63` to trigger, no real station reaches that, and the endpoint has
+no authentication to protect anyway — so the missing control is authentication
+rather than a bound.
 
-R4 (saturation), R5/R18 (metric poisoning and erasure), R6 (timezone semantics),
-R15 (rounding edges), R17 (the int64 overflow and its boundary), R9 (the 422
-envelope), R16 (the `date-time` violation), the whole validation-contract set, the
-schemathesis fuzz suite, and the remaining concurrency invariants.
+**P2 (14 tests)** — R10 ordering, R12 unbounded strings, R13/R21 perf, R14 the UI
+smoke, R19/R20 deployment surface and traceback leakage, plus the tests that pin
+framework defaults (numeric-string coercion, exact-match IDs, 405/404 routing).
 
-Two calls worth defending:
-
-- **R16 is register-rank 3 but its tests are P1.** The blast radius is client-side
-  deserialisation, not a wrong dispatch decision: an operator reading a mangled
-  timestamp still gets the right station on the right worklist. Alarming enough to
-  fix before release; not alarming enough to stop a build.
-- **R17 is an unhandled 500 and still P1.** A server error is normally the worst
-  class of failure, but this one needs `error_count ≥ 2**63` to trigger — no real
-  station reaches it, and the endpoint has no authentication to protect anyway, so
-  the missing control is authentication rather than a bound.
-
-**P2 — worth having, not worth blocking on.** 14 tests.
-
-R10 (worklist ordering), R12 (unbounded string length), R13 and R21 (the perf
-smoke), R14 (the UI smoke), R19/R20 (deployment surface and traceback leakage),
-plus the tests that pin framework defaults — numeric-string coercion, exact-match
-station IDs, 405/404 routing, the unreachable-clamp note. All real, none of them a
-reason to hold a release.
-
-**The distribution is deliberate and slightly uncomfortable.** 39% of the suite is
-P0, which is high — a fleet of "everything is critical" tests would be no
-prioritisation at all. It survives scrutiny here for one reason: 31 of those 42 are
-the parametrized scoring boundaries and properties, which are one conceptual
-assertion each, cost about a millisecond, and sit directly on top of the two
-highest-ranked risks in this register. If the suite grew, the honest move would be
-to re-audit P0 rather than let it drift upward with it.
+**The distribution is deliberate and slightly uncomfortable.** 39% P0 is high, and a
+fleet of "everything is critical" tests would be no prioritisation at all. It
+survives scrutiny because 31 of those 42 are the parametrized scoring boundaries and
+properties: one conceptual assertion each, a millisecond apiece, sitting directly on
+the two highest-ranked risks here. If the suite grew, the honest move would be to
+re-audit P0 rather than let it drift upward.

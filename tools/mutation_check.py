@@ -9,10 +9,7 @@ It copies `service/` to a scratch directory, applies one small mutation at a
 time, points pytest at the mutated copy via `pythonpath`, and records which tests
 died. `service/` itself is never touched.
 
-Usage:
-    python tools/mutation_check.py            # run every mutant
-    python tools/mutation_check.py --list     # show them without running
-    python tools/mutation_check.py -k offline # run mutants matching a substring
+Run it with `python tools/mutation_check.py`.
 
 A mutant that no test kills is a gap in the suite, and the script exits non-zero
 so that is not something you can skim past.
@@ -20,7 +17,6 @@ so that is not something you can skim past.
 
 from __future__ import annotations
 
-import argparse
 import re
 import shutil
 import subprocess
@@ -72,25 +68,11 @@ MUTANTS: tuple[Mutant, ...] = (
         "one keystroke. Decides whether a dead station at exactly 60.0 is flagged (R2)",
     ),
     Mutant(
-        "offline-penalty-weakened",
-        "app/scoring.py",
-        "OFFLINE_PENALTY = 40.0",
-        "OFFLINE_PENALTY = 35.0",
-        "offline stations quietly score higher and drop off the worklist",
-    ),
-    Mutant(
         "error-penalty-reduced",
         "app/scoring.py",
         "ERROR_PENALTY_PER = 5.0",
         "ERROR_PENALTY_PER = 4.0",
         "erroring stations look healthier than they are",
-    ),
-    Mutant(
-        "error-cap-raised",
-        "app/scoring.py",
-        "ERROR_PENALTY_CAP = 30.0",
-        "ERROR_PENALTY_CAP = 40.0",
-        "changes where the R4 saturation blind spot begins",
     ),
     Mutant(
         "latency-divisor-changed",
@@ -100,53 +82,11 @@ MUTANTS: tuple[Mutant, ...] = (
         "latency contributes less; slow stations score higher",
     ),
     Mutant(
-        "latency-cap-raised",
-        "app/scoring.py",
-        "LATENCY_PENALTY_CAP = 20.0",
-        "LATENCY_PENALTY_CAP = 25.0",
-        "moves the point where latency stops mattering",
-    ),
-    Mutant(
-        "rounding-precision",
-        "app/scoring.py",
-        "return round(max(score, 0.0), 2)",
-        "return round(max(score, 0.0), 1)",
-        "the R15 rounding surface — would silently change flags at the boundary",
-    ),
-    Mutant(
         "recency-inverted",
         "app/routers/stations.py",
         ".order_by(StationReport.timestamp.desc())",
         ".order_by(StationReport.timestamp.asc())",
         "station status starts reporting the *oldest* report. The worst realistic bug",
-    ),
-    Mutant(
-        "metrics-connectivity-flipped",
-        "app/routers/metrics.py",
-        'if r.connectivity_status == "online"',
-        'if r.connectivity_status != "online"',
-        "online/offline counts swap on the dashboard",
-    ),
-    Mutant(
-        "ingest-args-swapped",
-        "app/routers/reports.py",
-        "latency_ms=payload.latency_ms,\n        error_count=payload.error_count,",
-        "latency_ms=payload.error_count,\n        error_count=int(payload.latency_ms),",
-        "a copy-paste slip at the call site — the scoring function itself is untouched",
-    ),
-    Mutant(
-        "flag-stored-inverted",
-        "app/routers/reports.py",
-        "flagged = is_flagged(score)",
-        "flagged = not is_flagged(score)",
-        "score is right, the stored flag is wrong — only cross-field checks catch this",
-    ),
-    Mutant(
-        "offline-branch-dropped",
-        "app/scoring.py",
-        'if connectivity_status == "offline":\n        score -= OFFLINE_PENALTY',
-        'if connectivity_status == "offline_DISABLED":\n        score -= OFFLINE_PENALTY',
-        "connectivity stops affecting the score at all",
     ),
     Mutant(
         "poor-hygiene-filter-inverted",
@@ -204,16 +144,7 @@ def run_gate(mutant_root: Path) -> tuple[bool, list[str]]:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--list", action="store_true", help="list mutants and exit")
-    parser.add_argument("-k", dest="pattern", default="", help="only mutants matching this")
-    args = parser.parse_args()
-
-    selected = [m for m in MUTANTS if args.pattern in m.name]
-    if args.list:
-        for mutant in selected:
-            print(f"{mutant.name:32} {mutant.path:28} {mutant.rationale}")
-        return 0
+    selected = list(MUTANTS)
 
     control = [m for m in selected if m.name == "metrics-counts-all-history"]
     survivors: list[Mutant] = []

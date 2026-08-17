@@ -39,7 +39,7 @@ jobs:
             --cov --cov-report=xml:reports/coverage.xml
       - name: Build HTML report
         if: always()
-        run: python tools/test_report.py --label "main @ ${{ github.sha }} · gate"
+        run: python tools/test_report.py
       - if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -71,20 +71,10 @@ jobs:
       # instant /health answers and gives up at a deadline, so a slow runner waits
       # and a broken deploy fails fast with a readable message.
       - name: Wait for readiness
-        env:
-          BASE_URL: http://localhost:8000
-          READINESS_TIMEOUT_S: "120"
-        run: |
-          python - <<'PY'
-          import sys
-          from tests.helpers.clients import probe_service
-          from tests.helpers.config import SETTINGS
-          reason = probe_service(SETTINGS.base_url, SETTINGS.readiness_timeout_s)
-          if reason:
-              print(f"::error::{reason}")
-              sys.exit(1)
-          print("service is ready")
-          PY
+        run: >-
+          python -c "import sys;
+          from tests.helpers.clients import probe_service;
+          sys.exit(probe_service('http://localhost:8000', 120.0) or 0)"
 
       - name: pytest -m e2e
         env:
@@ -99,7 +89,7 @@ jobs:
       # containerised run rather than one file.
       - name: Build HTML report
         if: always()
-        run: python tools/test_report.py --label "main @ ${{ github.sha }} · e2e vs docker compose"
+        run: python tools/test_report.py
 
       - name: Service logs
         if: failure()
@@ -141,19 +131,10 @@ jobs:
       - run: docker compose -f service/docker-compose.yml up -d --build
 
       - name: Wait for readiness
-        env:
-          BASE_URL: http://localhost:8000
-          READINESS_TIMEOUT_S: "120"
-        run: |
-          python - <<'PY'
-          import sys
-          from tests.helpers.clients import probe_service
-          from tests.helpers.config import SETTINGS
-          reason = probe_service(SETTINGS.base_url, SETTINGS.readiness_timeout_s)
-          if reason:
-              print(f"::error::{reason}")
-              sys.exit(1)
-          PY
+        run: >-
+          python -c "import sys;
+          from tests.helpers.clients import probe_service;
+          sys.exit(probe_service('http://localhost:8000', 120.0) or 0)"
 
       - name: pytest -m perf
         id: perf
@@ -166,16 +147,9 @@ jobs:
           PERF_P95_BUDGET_MS: "250"
         run: pytest -m perf -s --junitxml=reports/junit-perf.xml | tee reports/perf.txt
 
-      - name: Surface the numbers in the job summary
+      - name: Show the measured numbers
         if: always()
-        run: |
-          {
-            echo "## Perf smoke (non-blocking)"
-            echo
-            echo '```'
-            grep -E "p50=|environment:|budget" reports/perf.txt || echo "no measurements captured"
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
+        run: grep -E "p50=|environment:|budget" reports/perf.txt || true
 
       - if: always()
         run: docker compose -f service/docker-compose.yml down -v
