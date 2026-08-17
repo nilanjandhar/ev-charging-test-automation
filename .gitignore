@@ -1,0 +1,30 @@
+# Local working documents — not part of the submission
+task.md
+Staff QA Engineer - Interview Assignment.md
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# Test / tooling output
+.pytest_cache/
+.hypothesis/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+reports/
+*.db
+noc.db
+
+# Playwright
+node_modules/
+playwright-report/
+test-results/
+
+# OS
+.DS_Store

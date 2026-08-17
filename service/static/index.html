@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NOC Station Health Dashboard</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; background: #f4f6f9; color: #1a1a2e; }
+    header { background: #1a1a2e; color: #fff; padding: 16px 32px; display: flex; justify-content: space-between; align-items: center; }
+    header h1 { font-size: 1.25rem; }
+    #status-badge { font-size: 0.8rem; background: #2ecc71; color: #fff; padding: 4px 10px; border-radius: 12px; }
+    main { padding: 32px; max-width: 1100px; margin: 0 auto; }
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 32px; }
+    .card { background: #fff; border-radius: 8px; padding: 20px; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+    .card .label { font-size: 0.75rem; text-transform: uppercase; color: #888; margin-bottom: 6px; }
+    .card .value { font-size: 2rem; font-weight: 700; }
+    .card.danger .value { color: #e74c3c; }
+    h2 { margin-bottom: 16px; font-size: 1rem; text-transform: uppercase; color: #555; letter-spacing: .05em; }
+    table { width: 100%; background: #fff; border-radius: 8px; border-collapse: collapse; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+    th, td { padding: 12px 16px; text-align: left; border-bottom: 1px solid #f0f0f0; font-size: 0.9rem; }
+    th { background: #f9f9fb; font-weight: 600; color: #555; }
+    tr:last-child td { border-bottom: none; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 0.75rem; font-weight: 600; }
+    .badge.flagged { background: #fdecea; color: #e74c3c; }
+    .badge.ok { background: #eafaf1; color: #27ae60; }
+    #empty { text-align: center; color: #aaa; padding: 32px; display: none; }
+    #refresh-btn { margin-bottom: 16px; background: #1a1a2e; color: #fff; border: none; padding: 8px 18px; border-radius: 6px; cursor: pointer; font-size: 0.85rem; }
+    #refresh-btn:hover { background: #2c2c54; }
+    #error-msg { color: #e74c3c; margin-bottom: 16px; font-size: 0.9rem; display: none; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>⚡ NOC Station Health Dashboard</h1>
+    <span id="status-badge">Live</span>
+  </header>
+  <main>
+    <div class="cards">
+      <div class="card"><div class="label">Total Stations</div><div class="value" id="total">—</div></div>
+      <div class="card"><div class="label">Online</div><div class="value" id="online">—</div></div>
+      <div class="card"><div class="label">Offline</div><div class="value" id="offline">—</div></div>
+      <div class="card danger"><div class="label">Flagged</div><div class="value" id="flagged">—</div></div>
+      <div class="card"><div class="label">Avg Latency (ms)</div><div class="value" id="latency">—</div></div>
+    </div>
+
+    <div id="error-msg"></div>
+    <button id="refresh-btn" onclick="loadData()">↻ Refresh</button>
+
+    <h2>All Stations</h2>
+    <table id="all-table">
+      <thead>
+        <tr>
+          <th>Station ID</th>
+          <th>Hygiene Score</th>
+          <th>Status</th>
+          <th>Connectivity</th>
+          <th>Last Report</th>
+        </tr>
+      </thead>
+      <tbody id="all-body"></tbody>
+    </table>
+
+    <h2 style="margin-top:32px">Poor Hygiene Stations</h2>
+    <table id="poor-table">
+      <thead>
+        <tr>
+          <th>Station ID</th>
+          <th>Hygiene Score</th>
+          <th>Status</th>
+          <th>Last Report</th>
+        </tr>
+      </thead>
+      <tbody id="poor-body"></tbody>
+    </table>
+    <div id="empty">No flagged stations — network is healthy ✅</div>
+  </main>
+
+  <script>
+    async function loadData() {
+      const errEl = document.getElementById('error-msg');
+      errEl.style.display = 'none';
+      try {
+        const [summary, all, poor] = await Promise.all([
+          fetch('/metrics/summary').then(r => { if (!r.ok) throw new Error('metrics failed'); return r.json(); }),
+          fetch('/stations').then(r => { if (!r.ok) throw new Error('stations failed'); return r.json(); }),
+          fetch('/stations/poor-hygiene').then(r => { if (!r.ok) throw new Error('poor-hygiene failed'); return r.json(); }),
+        ]);
+
+        document.getElementById('total').textContent   = summary.total_stations;
+        document.getElementById('online').textContent  = summary.online_count;
+        document.getElementById('offline').textContent = summary.offline_count;
+        document.getElementById('flagged').textContent = summary.flagged_count;
+        document.getElementById('latency').textContent = summary.average_latency_ms !== null
+          ? summary.average_latency_ms.toFixed(1)
+          : 'N/A';
+
+        // All stations table
+        const allBody = document.getElementById('all-body');
+        allBody.innerHTML = '';
+        all.forEach(s => {
+          const row = document.createElement('tr');
+          row.innerHTML = `
+            <td><strong>${s.station_id}</strong></td>
+            <td>${s.hygiene_score.toFixed(1)}</td>
+            <td><span class="badge ${s.flagged ? 'flagged' : 'ok'}">${s.flagged ? 'Flagged' : 'OK'}</span></td>
+            <td>${s.connectivity_status}</td>
+            <td>${new Date(s.latest_timestamp).toLocaleString()}</td>
+          `;
+          allBody.appendChild(row);
+        });
+
+        // Poor hygiene table
+        const tbody = document.getElementById('poor-body');
+        const empty = document.getElementById('empty');
+        tbody.innerHTML = '';
+
+        if (poor.length === 0) {
+          empty.style.display = 'block';
+          document.getElementById('poor-table').style.display = 'none';
+        } else {
+          empty.style.display = 'none';
+          document.getElementById('poor-table').style.display = 'table';
+          poor.forEach(s => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+              <td><strong>${s.station_id}</strong></td>
+              <td>${s.hygiene_score.toFixed(1)}</td>
+              <td><span class="badge flagged">Flagged</span></td>
+              <td>${new Date(s.latest_timestamp).toLocaleString()}</td>
+            `;
+            tbody.appendChild(row);
+          });
+        }
+      } catch (e) {
+        errEl.textContent = `Failed to load data: ${e.message}`;
+        errEl.style.display = 'block';
+      }
+    }
+
+    loadData();
+    setInterval(loadData, 30000);
+  </script>
+</body>
+</html>
