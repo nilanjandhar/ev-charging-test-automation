@@ -30,9 +30,17 @@ markers = [
 # so that the list itself documents the known dust.
 filterwarnings = [
     "error",
-    "ignore:Using `httpx` with `starlette.testclient` is deprecated:DeprecationWarning",
+    # starlette 1.6 nudges towards httpx2; the service pins httpx via its own deps
+    # and the TestClient works correctly. Not ours to fix, so ignored by exact message.
+    "ignore:Using .httpx. with .starlette.testclient. is deprecated:starlette.exceptions.StarletteDeprecationWarning",
     "ignore::DeprecationWarning:schemathesis.*",
     "ignore::DeprecationWarning:_pytest.*",
+    # schemathesis' ASGI transport leaves anyio memory streams for the collector.
+    # Escalated to an error by the rule above, the resulting ResourceWarning is
+    # reported against whichever test happens to trigger GC — i.e. it fails a
+    # random *unrelated* test. Suppressed at the source module rather than
+    # globally, so a resource leak anywhere else is still an error.
+    "ignore::ResourceWarning:anyio.streams.memory",
 ]
 asyncio_mode = "strict"
 asyncio_default_fixture_loop_scope = "function"

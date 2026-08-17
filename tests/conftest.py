@@ -139,6 +139,40 @@ def api_client(isolated_engine: Engine) -> Iterator[TestClient]:
 
 
 @pytest.fixture
+def api_client_observing_500s(isolated_engine: Engine) -> Iterator[TestClient]:
+    """Like `api_client`, but reports server errors as a 500 instead of re-raising.
+
+    `TestClient` re-raises unhandled server exceptions by default, which is the
+    right default: a test that swallows a stack trace into `assert 500` hides the
+    cause. It is wrong for the handful of tests whose *subject* is what a real HTTP
+    client sees when the service crashes — over the wire that is a 500 with an
+    empty body, and asserting on the Python exception type would be asserting on
+    an implementation detail no client can observe.
+    """
+    from sqlalchemy.orm import Session, sessionmaker
+    from starlette.testclient import TestClient
+
+    from app.database import get_db
+    from app.main import app
+
+    session_factory = sessionmaker(bind=isolated_engine, autocommit=False, autoflush=False)
+
+    def _override_get_db() -> Iterator[Session]:
+        db = session_factory()
+        try:
+            yield db
+        finally:
+            db.close()
+
+    app.dependency_overrides[get_db] = _override_get_db
+    try:
+        with TestClient(app, raise_server_exceptions=False) as client:
+            yield client
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+
+
+@pytest.fixture
 def openapi_schema(api_client: TestClient) -> dict[str, Any]:
     """The service's own published schema — the contract layer's source of truth."""
     response = api_client.get("/openapi.json")
