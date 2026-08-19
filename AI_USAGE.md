@@ -6,10 +6,11 @@ prompt, the unedited output, and what I did with it — is in
 reconstructed afterwards. The three examples below are taken from it.
 
 **How I worked, in one line:** I did the recon by hand and kept the strategy;
-I delegated the typing. The standing context block I used for every session is in
-[`CLAUDE.md`](CLAUDE.md), including a "facts established during recon" section
-that exists specifically to stop the model re-deriving things I had already
-verified against a running service.
+I delegated the typing. Every session started from a standing context block —
+the role, the hard rules (never modify `service/`, no `sleep()`, no bare
+status-code assertions), and a "facts established during recon" section that
+existed specifically to stop the model re-deriving things I had already verified
+against a running service.
 
 The single most useful thing I did was **not** a prompt. Before opening a session
 I stood the service up and curl'd every endpoint. That produced two facts that
@@ -27,7 +28,7 @@ isolation problem.
 
 ---
 
-## Example 1 — Accepted as-is
+## Example 1 — Accepted as-is (and later deleted)
 
 **What I asked for:** a step for the PR workflow that turns the JUnit XML into a
 GitHub job summary, "so the result is visible without opening the log."
@@ -61,10 +62,10 @@ GitHub job summary, "so the result is visible without opening the log."
 **Why I accepted it unchanged.** Three reasons, in order:
 
 1. **I verified it rather than trusting it.** I ran the exact script against a
-   real `reports/junit.xml` produced by this suite and checked the rendered table
-   — 91 tests, 0 failures, 5 xfailed, 1.4s. I also checked the heredoc terminator
-   survives YAML block-scalar dedenting, which is the one thing that silently
-   breaks this pattern.
+   real `reports/junit.xml` produced by this suite (91 tests at the time) and
+   checked the rendered table. I also checked that the heredoc terminator survives
+   YAML block-scalar dedenting, which is the one thing that silently breaks this
+   pattern.
 2. **It requires no knowledge of this service.** JUnit XML is a fixed schema and
    `$GITHUB_STEP_SUMMARY` is a fixed contract. There is no domain judgment for me
    to add, which is exactly the kind of work worth delegating.
@@ -73,8 +74,18 @@ GitHub job summary, "so the result is visible without opening the log."
    missing-file branch, so a run that dies before pytest starts reports *why*
    instead of raising a confusing `FileNotFoundError` on top of the real failure.
 
-This is the shape of AI use I am comfortable with: mechanical, verifiable in a
-minute, and wrong in ways I would notice immediately.
+**And it is no longer in the repo — check `pr.yml` and you will not find it.**
+Later I did a pass specifically to cut over-engineering, and this went: thirty
+lines of Python embedded in YAML to restate counts GitHub already renders, when by
+then the HTML report shipped in the job artifact carried the real detail.
+
+I have kept it as Example 1 rather than swapping in something still present,
+because the two judgments are both true and neither cancels the other. Accepting
+it was right: it was mechanical, verified in a minute, and wrong in ways I would
+have noticed immediately. Deleting it was also right, and for a different reason —
+"correct and cheap" is not the same test as "earns its place". The first question
+is the one to ask of an AI output; the second is the one to ask of your own repo,
+and it is easy to skip because the code already works.
 
 ---
 

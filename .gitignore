@@ -1,9 +1,9 @@
 # ---------------------------------------------------------------------------
 # What this repository publishes
 # ---------------------------------------------------------------------------
-# Intentionally tracked: README.md, TEST_STRATEGY.md, AI_USAGE.md, CLAUDE.md
-# (the standing AI context block, cited by AI_USAGE.md), notes/, tests/, tools/,
-# .github/workflows/, Makefile, pyproject.toml, requirements-*.txt, service/.
+# Intentionally tracked: README.md, TEST_STRATEGY.md, AI_USAGE.md, tests/,
+# tools/, notes/, .github/workflows/, Makefile, pyproject.toml,
+# requirements-*.txt, service/.
 #
 # Everything below is either private working material, generated output, or
 # machine-local. Nothing here should reach a public repository.
@@ -140,11 +140,12 @@ service/*.db
 # ---------------------------------------------------------------------------
 # AI assistant local state
 # ---------------------------------------------------------------------------
-# Session logs and machine-local permission settings. CLAUDE.md is the exception
-# and is tracked on purpose — it is the standing context block AI_USAGE.md cites.
+# Session logs, machine-local permission settings, and the standing context block
+# I fed each session — all working material rather than part of the submission.
 .claude/
 .aider*
 .cursor/
+CLAUDE.md
 .github/copilot-instructions.local.md
 
 # ---------------------------------------------------------------------------
