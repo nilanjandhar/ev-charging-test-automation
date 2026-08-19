@@ -86,7 +86,11 @@ strict = true
 # The service is third-party code from our point of view: type-check our tests
 # against it, but do not demand annotations from it.
 [[tool.mypy.overrides]]
-module = ["app.*", "schemathesis.*", "jsonschema.*", "referencing.*"]
+# Third-party packages without stubs. `playwright.*` is here for a specific reason:
+# it ships only in requirements-ui.txt, so on any machine that installed just
+# requirements-dev.txt — which is every CI gate runner — the import is genuinely
+# absent. Without this, `mypy --strict` passes locally and fails in CI.
+module = ["app.*", "schemathesis.*", "jsonschema.*", "referencing.*", "playwright.*"]
 ignore_missing_imports = true
 follow_imports = "skip"
 disallow_untyped_calls = false

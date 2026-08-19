@@ -20,6 +20,29 @@ env:
   HYPOTHESIS_PROFILE: ci
 
 jobs:
+  # Duplicated from pr.yml rather than extracted into a reusable workflow: two call
+  # sites do not justify the indirection. It is here because a push straight to main
+  # never runs the PR gate, and that is exactly when nobody is watching.
+  static:
+    name: lint + types
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: |
+            requirements-dev.txt
+            service/requirements.txt
+      - run: pip install -r requirements-dev.txt
+      - name: ruff
+        run: |
+          ruff check tests tools --output-format=github
+          ruff format --check tests tools
+      - name: mypy --strict
+        run: mypy
+
   gate:
     name: unit + contract + api
     runs-on: ubuntu-latest
