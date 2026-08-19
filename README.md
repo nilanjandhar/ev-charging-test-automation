@@ -1,11 +1,8 @@
 # Station Health API — test automation suite
 
-[![PR gate](https://github.com/OWNER/REPO/actions/workflows/pr.yml/badge.svg)](https://github.com/OWNER/REPO/actions/workflows/pr.yml)
-[![main](https://github.com/OWNER/REPO/actions/workflows/main.yml/badge.svg)](https://github.com/OWNER/REPO/actions/workflows/main.yml)
-[![nightly](https://github.com/OWNER/REPO/actions/workflows/nightly.yml/badge.svg)](https://github.com/OWNER/REPO/actions/workflows/nightly.yml)
-
-> Replace `OWNER/REPO` in the three badge URLs above with your GitHub path once
-> the repository is pushed.
+[![PR gate](https://github.com/nilanjandhar/staff-qa-take-home/actions/workflows/pr.yml/badge.svg)](https://github.com/nilanjandhar/staff-qa-take-home/actions/workflows/pr.yml)
+[![main](https://github.com/nilanjandhar/staff-qa-take-home/actions/workflows/main.yml/badge.svg)](https://github.com/nilanjandhar/staff-qa-take-home/actions/workflows/main.yml)
+[![nightly](https://github.com/nilanjandhar/staff-qa-take-home/actions/workflows/nightly.yml/badge.svg)](https://github.com/nilanjandhar/staff-qa-take-home/actions/workflows/nightly.yml)
 
 A test suite for a FastAPI microservice that ingests EV charging station health
 reports, computes a network hygiene score, and exposes REST endpoints for station
