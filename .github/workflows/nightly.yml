@@ -29,8 +29,8 @@ jobs:
     name: hypothesis (broad profile)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
@@ -52,7 +52,7 @@ jobs:
         run: python tools/test_report.py
 
       - if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: nightly-property-reports
           path: reports/
@@ -62,8 +62,8 @@ jobs:
     name: schemathesis (large budget)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
@@ -87,7 +87,7 @@ jobs:
         run: python tools/test_report.py
 
       - if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: nightly-fuzz-reports
           path: reports/
@@ -97,8 +97,8 @@ jobs:
     name: dashboard smoke
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
@@ -134,7 +134,7 @@ jobs:
       # and screenshots only exist on failure, which `path:` tolerates.
       - name: Screenshots, traces and report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: nightly-ui-artifacts
           path: |

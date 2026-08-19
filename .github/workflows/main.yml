@@ -27,8 +27,8 @@ jobs:
     name: lint + types
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
@@ -47,8 +47,8 @@ jobs:
     name: unit + contract + api
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
@@ -64,7 +64,7 @@ jobs:
         if: always()
         run: python tools/test_report.py
       - if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: main-gate-reports
           path: reports/
@@ -75,8 +75,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: gate
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
@@ -123,7 +123,7 @@ jobs:
         run: docker compose -f service/docker-compose.yml down -v
 
       - if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: main-e2e-reports
           path: reports/
@@ -141,8 +141,8 @@ jobs:
     # unit suite — nobody should ever be unsure whether main is broken or slow.
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
@@ -183,7 +183,7 @@ jobs:
         run: docker compose -f service/docker-compose.yml down -v
 
       - if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: main-perf-reports
           path: reports/
