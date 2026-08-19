@@ -59,11 +59,21 @@ hardcoding a threshold.
    sleep — the compose file gives the api container no healthcheck to wait on. Note that
    `/health` itself pays the 40 ms toll, so the poll budget accounts for it.
 
-## Caveat on this document
+## The prediction, checked against a real Docker run
 
-Docker is **not installed on the machine this suite was developed on**, so the Docker-side
-numbers above are derived from the configuration, not measured. The local numbers are
-measured. The e2e and perf layers are written to run against `docker compose up` and are
-exercised in CI on GitHub-hosted runners, where Docker is available; locally they skip
-with a clear message rather than failing. This is stated again in `TEST_STRATEGY.md`
-rather than being quietly left out.
+Docker was not installed on the machine this suite was developed on, so the Docker
+column above was originally derived from the configuration rather than measured. The
+first CI run on a GitHub-hosted runner settled it:
+
+| Endpoint | local p95 | Docker p95 | delta |
+|---|---|---|---|
+| `GET /health` | 0.59 ms | 42.16 ms | +41.6 |
+| `GET /metrics/summary` | 1.21 ms | 44.30 ms | +43.1 |
+| `GET /stations` | — | 44.48 ms | — |
+| `POST /reports` | 1.53 ms | 44.60 ms | +43.1 |
+
+Every endpoint lands within ~1 ms of `local + 40 ms`, and `/health` — which does no
+work at all — costs 42 ms. That is the simulated-latency middleware and nothing else:
+the prediction that it dominates every other difference on this list holds, and the
+remaining engine, networking and image differences are inside the noise. A p95 budget
+measured locally would have been wrong by a factor of 30.

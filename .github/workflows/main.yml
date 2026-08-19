@@ -145,7 +145,12 @@ jobs:
           # Docker's 40ms floor plus runner noise. Catches an order-of-magnitude
           # regression, which is the only claim this test can honestly make.
           PERF_P95_BUDGET_MS: "250"
-        run: pytest -m perf -s --junitxml=reports/junit-perf.xml | tee reports/perf.txt
+        # `mkdir -p` first: tee opens its output file before pytest creates
+        # reports/ via --junitxml, so without this the step fails on a missing
+        # directory even when every test passed. Observed on the first CI run.
+        run: |
+          mkdir -p reports
+          pytest -m perf -s --junitxml=reports/junit-perf.xml | tee reports/perf.txt
 
       - name: Show the measured numbers
         if: always()

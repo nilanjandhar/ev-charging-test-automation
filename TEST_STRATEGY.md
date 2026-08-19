@@ -250,10 +250,17 @@ clients depend on; the risk is a major-version upgrade changing them quietly.
 
 ## Caveats on my own numbers
 
-**Docker was not installed on the machine this was developed on.** The local latency
-figures are measured; the Docker-side effects are derived from configuration and
-stated as such. The e2e, perf and UI layers were exercised against a live local
-uvicorn instance — real HTTP, real serialisation, SQLite — and are written to run
-against `docker compose` in CI. So the one thing I have not observed first-hand is
-the latest-per-station join running on PostgreSQL, which is exactly the difference
-the e2e job exists to cover; I would watch its first run before trusting it.
+**Docker was not installed on the machine this was developed on**, so while I was
+writing this the Docker-side effects were derived from configuration and the
+latest-per-station join had never run against PostgreSQL. I said I would watch the
+first CI run before trusting it. It has now run:
+
+- **e2e against `docker compose` passed** — the join behaves the same on PostgreSQL
+  as on SQLite, which was the open question.
+- **The 40 ms prediction was right.** Measured Docker p95 is 42–45 ms across every
+  endpoint against a 0.6–1.5 ms local baseline — `/health`, which does no work at
+  all, costs 42 ms. Numbers in [`notes/docker-vs-local.md`](notes/docker-vs-local.md).
+- **The perf job was red for a reason that had nothing to do with performance**: a
+  `tee` writing into `reports/` before pytest created it. Every perf test passed. It
+  is fixed, and it is a good argument for the design — had perf been a merge gate,
+  that shell bug would have blocked every merge.
